@@ -29,6 +29,9 @@
 #define TAG_INHERIT_START "### inherit start ###"
 #define TAG_INHERIT_END "### inherit end ###"
 
+#define MT_MODE_START "^\\s*### setmtmode:"
+#define MT_MODE_PARAM "\\s*(\\d+)\\s*,\\s*(\\d+)\\s*$"
+
 #define LOCK_THREADS_TO_CORES_START "^\\s*### lock threads to cores"
 #define LOCK_THREADS_TO_CORES_PARAM "\\s*(\\d+)\\s*$"
 
@@ -240,6 +243,7 @@ void MP_Pipeline::prepare_slave(slave_create_params* params, cpu_arrangement_inf
         int fetcher_cpu_index = cpu_arrangement_info->arrangement[cpu_arrangement_info->current_index];
         cpu_arrangement_info->current_index++;
         cpu_arrangement_info->current_index %= cpu_arrangement_info->cpu_count;
+
 
         int server_cpu_index = cpu_arrangement_info->arrangement[cpu_arrangement_info->current_index];
         sprintf_append(params->script, ", fetcher_thread_lock_to_cpu=%d, server_thread_lock_to_cpu=%d", 
@@ -591,9 +595,29 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
                 prepare_slave(&params, &cpu_arrangement_info, env);
 
                 create_slave(env, &params, &port, _slave_stdin_handles + slave_count);
+				
+			int mt_mode, mt_threads;
+			bool mt_mode_b = false;
+			if (has_statement(current_script_part, MT_MODE_START))
+			{
+				if (!scan_statement(current_script_part, MT_MODE_START MT_MODE_PARAM, NULL, 
+					"%d", &mt_mode,
+					"%d", &mt_threads,
+					NULL, NULL))
+				{
+					env->ThrowError("MP_Pipeline: Invalid SetMTMode statement.");
+				} else {
+					mt_mode_b = true;
+				}
+			}
 
                 begin_get_upstream_clip_function(next_script_part, process_id);
+				if (mt_mode_b)
+				{
+					sprintf_append(next_script_part, "SetMTMode(%d,%d)\nreturn " CLIENT_TEMPLATE "\n", mt_mode, mt_threads, _instance_id, port);
+				} else {
                 sprintf_append(next_script_part, "return " CLIENT_TEMPLATE "\n", _instance_id, port);
+				}
                 end_get_upstream_clip_function(next_script_part);
             }
             current_pos = splitter_pos + splitter_length;
