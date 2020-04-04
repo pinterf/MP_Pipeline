@@ -1,0 +1,6 @@
+This is the place to copy Avisynth libraries.
+
+Get the "filesonly" package from https://github.com/avisynth/AviSynthPlus/releases
+
+Copy x64\c_api\avisynth.lib to here and rename to avisynth_x64.lib
+Copy x86\c_api\avisynth.lib to here
