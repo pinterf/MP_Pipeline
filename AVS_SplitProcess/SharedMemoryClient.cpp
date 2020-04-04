@@ -69,11 +69,18 @@ PVideoFrame SharedMemoryClient::create_frame(int response_index, IScriptEnvironm
     auto& clip = _manager.header->clips[_clip_index];
     const unsigned char* buffer = (const unsigned char*)_manager.header + clip.frame_buffer_offset[response_index];
     PVideoFrame frame = SafeNewVideoFrame(env, _vi);
-    copy_plane(frame, buffer, clip.frame_pitch, _vi, PLANAR_Y);
-    if (_vi.IsPlanar() && !_vi.IsY8())
+
+    const int planesYUV[4] = { PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A };
+    const int planesRGB[4] = { PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A };
+    const int* planes = _vi.IsYUV() || _vi.IsYUVA() ? planesYUV : planesRGB;
+
+    copy_plane(frame, buffer, clip.frame_pitch, _vi, planes[0]); // Y or G
+    if (_vi.IsPlanar() && !_vi.IsY())
     {
-        copy_plane(frame, buffer + clip.frame_offset_u, clip.frame_pitch_uv, _vi, PLANAR_U);
-        copy_plane(frame, buffer + clip.frame_offset_v, clip.frame_pitch_uv, _vi, PLANAR_V);
+        copy_plane(frame, buffer + clip.frame_offset_u, clip.frame_pitch_uv, _vi, planes[1]); // U or B
+        copy_plane(frame, buffer + clip.frame_offset_v, clip.frame_pitch_uv, _vi, planes[2]); // V or R
+        if (_vi.NumComponents() == 4)
+          copy_plane(frame, buffer + clip.frame_offset_a, clip.frame_pitch_a, _vi, planes[3]); // A
     }
     return frame;
 }
@@ -243,9 +250,10 @@ const VideoInfo& SharedMemoryClient::GetVideoInfo()
     return _vi;
 }
 
-void SharedMemoryClient::SetCacheHints(int cachehints,int frame_range)
+int SharedMemoryClient::SetCacheHints(int cachehints,int frame_range)
 {
     // we don't handle caching here
+  return 0;
 }
 
 void SharedMemoryClient::GetAudio(void* buf, __int64 start, __int64 count, IScriptEnvironment* env)

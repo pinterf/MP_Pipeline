@@ -68,10 +68,12 @@ typedef __declspec(align(64)) struct _shared_memory_clip_info_t
 
     int frame_pitch;
     int frame_pitch_uv;
+    int frame_pitch_a;
 
     // relative to the beginning of buffer 
     int frame_offset_u;
     int frame_offset_v;
+    int frame_offset_a;
     // --------------------------------------
 
     // align the volatile part to beginning of a cache line, 

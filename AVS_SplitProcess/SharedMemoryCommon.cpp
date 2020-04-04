@@ -87,16 +87,27 @@ void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int cli
         DWORD clip_buffer_size = aligned(info.vi.RowSize()) * info.vi.height;
         info.frame_pitch = aligned(info.vi.RowSize(), FRAME_ALIGN);
 
-        if (info.vi.IsPlanar() && !info.vi.IsY8())
-        {
-            DWORD y_size = clip_buffer_size;
-            int uv_height = info.vi.height >> info.vi.GetPlaneHeightSubsampling(PLANAR_U);
-            int uv_row_size = info.vi.RowSize(PLANAR_U);
-            clip_buffer_size += aligned(uv_row_size) * uv_height * 2;
+        const int planesYUV[4] = { PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A };
+        const int planesRGB[4] = { PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A };
+        const int* planes = info.vi.IsYUV() || info.vi.IsYUVA() ? planesYUV : planesRGB;
 
-            info.frame_pitch_uv = aligned(uv_row_size, FRAME_ALIGN);
-            info.frame_offset_u = y_size;
-            info.frame_offset_v = y_size + info.frame_pitch_uv * uv_height;
+        if (info.vi.IsPlanar() && !info.vi.IsY())
+        {
+          DWORD y_size = clip_buffer_size;
+          int uv_height = info.vi.height >> info.vi.GetPlaneHeightSubsampling(planes[1]);
+          int uv_row_size = info.vi.RowSize(planes[1]);
+          clip_buffer_size += aligned(uv_row_size) * uv_height * 2;
+
+          int a_height = info.vi.NumComponents() == 4 ? info.vi.height : 0;
+          int a_row_size = info.vi.RowSize(planes[3]);
+          clip_buffer_size += aligned(a_row_size) * a_height;
+
+          info.frame_pitch_uv = aligned(uv_row_size, FRAME_ALIGN);
+          info.frame_offset_u = y_size;
+          info.frame_offset_v = y_size + info.frame_pitch_uv * uv_height;
+
+          info.frame_pitch_a = aligned(a_row_size, FRAME_ALIGN);
+          info.frame_offset_a = info.frame_offset_v + info.frame_pitch_a * a_height;
         }
         info.frame_buffer_size = clip_buffer_size;
 

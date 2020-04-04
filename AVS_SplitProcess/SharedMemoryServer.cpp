@@ -211,12 +211,20 @@ void SharedMemoryServer::copy_frame(PVideoFrame frame, int clip_index, int respo
 {
     const auto& clip = _manager.header->clips[clip_index];
     unsigned char* buffer = (unsigned char*)_manager.header + clip.frame_buffer_offset[response_index];
-    copy_plane(buffer, clip.frame_pitch, frame, clip.vi, PLANAR_Y);
-    if (clip.vi.IsPlanar() && !clip.vi.IsY8())
+
+    const int planesYUV[4] = { PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A };
+    const int planesRGB[4] = { PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A };
+    const int* planes = clip.vi.IsYUV() || clip.vi.IsYUVA() ? planesYUV : planesRGB;
+
+    copy_plane(buffer, clip.frame_pitch, frame, clip.vi, planes[0]); // Y or G
+    if (clip.vi.IsPlanar() && !clip.vi.IsY())
     {
-        copy_plane(buffer + clip.frame_offset_u, clip.frame_pitch_uv, frame, clip.vi, PLANAR_U);
-        copy_plane(buffer + clip.frame_offset_v, clip.frame_pitch_uv, frame, clip.vi, PLANAR_V);
+      copy_plane(buffer + clip.frame_offset_u, clip.frame_pitch_uv, frame, clip.vi, planes[1]); // U or B
+      copy_plane(buffer + clip.frame_offset_v, clip.frame_pitch_uv, frame, clip.vi, planes[2]); // V or R
+      if (clip.vi.NumComponents() == 4)
+        copy_plane(buffer + clip.frame_offset_a, clip.frame_pitch_a, frame, clip.vi, planes[3]); // A
     }
+
     _manager.check_data_buffer_integrity(clip_index, response_index);
 }
 
