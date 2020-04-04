@@ -26,6 +26,7 @@ xcopy /y Output\x64\releaseXP\MP_Pipeline.dll.slave.exe distrib\x64_xp\
 xcopy /y Output\x64\releaseXP\MP_Pipeline.dll.win32.slave.exe distrib\x64_xp\
 xcopy /y Output\x64\releaseXP\MP_Pipeline.dll.win32 distrib\x64_xp\
 
-xcopy /y Documentation\MP_Pipeline_readme.avs distrib\
+xcopy /y Documentation\MP_Pipeline_readme_avs26.avs distrib\
+xcopy /y Documentation\MP_Pipeline_readme_avsplus.avs distrib\
 xcopy /y LICENSE distrib\
 xcopy /y README.MD distrib\
