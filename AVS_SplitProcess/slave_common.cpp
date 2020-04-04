@@ -188,7 +188,7 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
     *slave_stdin_handle = NULL;
 
     size_t new_script_size = strlen(params->script) + 4096;
-    char* new_script = (char*)malloc(new_script_size);
+    char* new_script = new char[new_script_size];
     __try
     {
         memset(new_script, 0, new_script_size);
@@ -232,6 +232,6 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
     }
     __finally
     {
-        free(new_script);
+        delete[] new_script;
     }
 }
