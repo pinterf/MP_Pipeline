@@ -8,6 +8,8 @@ Copy files from x64 (or x64_xp) folder to the plugins directory for 64 bits plug
 MP_Pipeline 0.20
 
 #######################################################
+Change log:
+
 0.20 (20200404) pinterf
 * Avisynth+ support
   Add version resource
@@ -15,9 +17,8 @@ MP_Pipeline 0.20
   Cleanup folder structure
 
 0.18.2: (20190114) realfinder
-* Avisynth 2.6 Classic MT support (realfinder). ### setmtmode: <a>, <b> Translates into SetMTMode(a,b)
+* Avisynth 2.6 Classic MT support (realfinder). ### setmtmode: a, b Translates into SetMTMode(a,b)
 
-Change log:
 0.18
 * Fix deadlock when exported clip is consumed by multiple script block
 
