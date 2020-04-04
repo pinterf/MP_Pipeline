@@ -103,21 +103,21 @@ int _tmain(int argc, _TCHAR* argv[])
     memset(script, 0, sizeof(script));
     if (!GetEnvironmentVariable(SCRIPT_VAR_NAME, script, ARRAYSIZE(script) - 1))
     {
-        fprintf(stdout_file, "GetEnvironmentVariable failed, code = %d.\n", GetLastError());
+      fprintf(stdout_file, "GetEnvironmentVariable failed, code = %d.\n", GetLastError());
         return 1;
     }
     if (strlen(script) == 0)
     {
-        fprintf(stdout_file, "Script is empty.\n");
+      fprintf(stdout_file, "Script is empty.\n");
         return 2;
     }
     HANDLE stdin_handle = GetStdHandle(STD_INPUT_HANDLE);
     if (!stdin_handle)
     {
-        fprintf(stdout_file, "Standard input not redirected.\n");
+      fprintf(stdout_file, "Standard input not redirected.\n");
         return 5;
     } else if (stdin_handle == INVALID_HANDLE_VALUE) {
-        fprintf(stdout_file, "GetStdHandle failed, code = %d.\n", GetLastError());
+      fprintf(stdout_file, "GetStdHandle failed, code = %d.\n", GetLastError());
         return 6;
     }
     const TCHAR* avisynth_module_name = TEXT("avisynth.dll"); // Default
@@ -139,13 +139,16 @@ int _tmain(int argc, _TCHAR* argv[])
         return 10;
     }
 
+    const int ASK_FOR_INTERFACE_VERSION = 6; // AVS2.6 and AVS+ 3.5.0: 6, AVS+ 3.5.1: 6
     IScriptEnvironment* env = create_script_env(AVISYNTH_INTERFACE_VERSION);
     {
+        AVS_linkage = env->GetAVSLinkage();
+
         AVSValue v;
         AVSValue script_value = script;
         try
         {
-            v = env->Invoke("Eval", script_value);
+          v = env->Invoke("Eval", script_value);
         }
         catch (IScriptEnvironment::NotFound)
         {
@@ -190,14 +193,14 @@ int _tmain(int argc, _TCHAR* argv[])
         CreateThread(NULL, 0, exit_on_timeout, NULL, 0, NULL);
 #endif
     }
-    // It is not safe to delete env here since env is not allocated by us,
-    // and we don't have env->DeleteScriptEnvironment on pre-2.6,
-    // so we just call its destructor to let plugins clean up themselves
-    env->~IScriptEnvironment();
+    env->DeleteScriptEnvironment();
 
     // To prevent problems we don't free it, since we are exiting anyways
     // FreeLibrary(avisynth_module);
     ExitProcess(0);
     return 0;
 }
+
+// 2.6+ interface: this one should be filled manually after getting env
+const AVS_Linkage* AVS_linkage = nullptr;
 

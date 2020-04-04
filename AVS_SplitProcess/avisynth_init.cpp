@@ -5,13 +5,15 @@
 #include "SharedMemoryClient.h"
 #include "SharedMemoryServer.h"
 
-__declspec(dllexport) const char* __stdcall AvisynthPluginInit2(IScriptEnvironment* env)
-{
-    Register_MP_Pipeline(env);
-    Register_SelectThunkEvery(env);
-    Register_ThunkedInterleave(env);
-    Register_SharedMemoryClient(env);
-    Register_SharedMemoryServer(env);
+const AVS_Linkage* AVS_linkage = nullptr;
 
-    return "MP";
+extern "C" __declspec(dllexport) const char* __stdcall AvisynthPluginInit3(IScriptEnvironment * env, const AVS_Linkage* const vectors) {
+  AVS_linkage = vectors;
+  Register_MP_Pipeline(env);
+  Register_SelectThunkEvery(env);
+  Register_ThunkedInterleave(env);
+  Register_SharedMemoryClient(env);
+  Register_SharedMemoryServer(env);
+
+  return "MP";
 }
