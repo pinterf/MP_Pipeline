@@ -216,7 +216,10 @@ void SharedMemoryServer::copy_frame(PVideoFrame frame, int clip_index, int respo
     const int planesRGB[4] = { PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A };
     const int* planes = clip.vi.IsYUV() || clip.vi.IsYUVA() ? planesYUV : planesRGB;
 
-    copy_plane(buffer, clip.frame_pitch, frame, clip.vi, planes[0]); // Y or G
+    const bool isPackedRGB = clip.vi.IsRGB() && !clip.vi.IsPlanar();
+    const int plane0 = isPackedRGB ? PLANAR_Y : planes[0];
+
+    copy_plane(buffer, clip.frame_pitch, frame, clip.vi, plane0); //first or Y or G
     if (clip.vi.IsPlanar() && !clip.vi.IsY())
     {
       copy_plane(buffer + clip.frame_offset_u, clip.frame_pitch_uv, frame, clip.vi, planes[1]); // U or B

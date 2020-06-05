@@ -73,8 +73,10 @@ PVideoFrame SharedMemoryClient::create_frame(int response_index, IScriptEnvironm
     const int planesYUV[4] = { PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A };
     const int planesRGB[4] = { PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A };
     const int* planes = _vi.IsYUV() || _vi.IsYUVA() ? planesYUV : planesRGB;
+    const bool isPackedRGB = _vi.IsRGB() && !_vi.IsPlanar();
+    const int plane0 = isPackedRGB ? PLANAR_Y : planes[0];
 
-    copy_plane(frame, buffer, clip.frame_pitch, _vi, planes[0]); // Y or G
+    copy_plane(frame, buffer, clip.frame_pitch, _vi, plane0); // first or Y or G
     if (_vi.IsPlanar() && !_vi.IsY())
     {
         copy_plane(frame, buffer + clip.frame_offset_u, clip.frame_pitch_uv, _vi, planes[1]); // U or B
