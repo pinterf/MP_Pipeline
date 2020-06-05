@@ -107,7 +107,7 @@ void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int cli
           info.frame_offset_v = y_size + info.frame_pitch_uv * uv_height;
 
           info.frame_pitch_a = aligned(a_row_size, FRAME_ALIGN);
-          info.frame_offset_a = info.frame_offset_v + info.frame_pitch_a * a_height;
+          info.frame_offset_a = info.frame_offset_v + info.frame_pitch_uv * uv_height;
         }
         info.frame_buffer_size = clip_buffer_size;
 
