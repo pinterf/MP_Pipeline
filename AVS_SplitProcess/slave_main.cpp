@@ -139,8 +139,8 @@ int _tmain(int argc, _TCHAR* argv[])
         return 10;
     }
 
-    const int ASK_FOR_INTERFACE_VERSION = 6; // AVS2.6 and AVS+ 3.5.0: 6, AVS+ 3.5.1: 6
-    IScriptEnvironment* env = create_script_env(AVISYNTH_INTERFACE_VERSION);
+    const int ASK_FOR_INTERFACE_VERSION = AVISYNTH_CLASSIC_INTERFACE_VERSION; // AVS2.6 and AVS+ 3.5.0: 6, AVS+ 3.5.1: 6
+    IScriptEnvironment* env = create_script_env(ASK_FOR_INTERFACE_VERSION);
     {
         AVS_linkage = env->GetAVSLinkage();
 
