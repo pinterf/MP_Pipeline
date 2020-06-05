@@ -5,10 +5,14 @@ Plugin for Avisynth
 Copy files from x86 (or x86_xp) folder to the plugins directory for 32 bits plugins
 Copy files from x64 (or x64_xp) folder to the plugins directory for 64 bits plugins
 
-MP_Pipeline 0.20
+MP_Pipeline 0.21
 
 #######################################################
 Change log:
+
+0.21 (20200605) pinterf
+* Fix buffer overflow for alpha-aware YUVA420 and YUVA422
+* Fix passing packed RGB formats
 
 0.20 (20200404) pinterf
 * Avisynth+ support
