@@ -1,6 +1,6 @@
 1 VERSIONINFO
- FILEVERSION 0,21,0,0
- PRODUCTVERSION 0,21,0,0
+ FILEVERSION 0,22,0,0
+ PRODUCTVERSION 0,22,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -18,14 +18,14 @@ BEGIN
             VALUE "Comments", "SplitProcess_Slave helper for MP_Pipeline\0"
             VALUE "CompanyName", "\0"
             VALUE "FileDescription", "SplitProcess_Slave MP_Pipeline helper for Avisynth+ and Avisynth 2.6\0"
-            VALUE "FileVersion", "0, 21, 0, 0\0"
+            VALUE "FileVersion", "0, 22, 0, 0\0"
             VALUE "InternalName", "SplitProcess_Slave\0"
             VALUE "LegalCopyright", "Copyleft 2011-2012 SAPikachu, 2018- et al.\0"
             VALUE "LegalTrademarks", "\0"
             VALUE "OriginalFilename", "MP_Pipeline.dll.slave.exe\0"
             VALUE "PrivateBuild", "\0"
             VALUE "ProductName", "MP_Pipeline\0"
-            VALUE "ProductVersion", "0, 21, 0, 0\0"
+            VALUE "ProductVersion", "0, 22, 0, 0\0"
             VALUE "SpecialBuild", "\0"
         END
     END
