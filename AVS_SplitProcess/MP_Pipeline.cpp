@@ -8,6 +8,8 @@
 #include "trace.h"
 
 #include <regex>
+#include <sstream>
+#include <string>
 #include <functional>
 
 // For UUID functions
@@ -258,19 +260,64 @@ void MP_Pipeline::prepare_slave(slave_create_params* params, cpu_arrangement_inf
 
 void copy_inherit_block(const char* source, char* target)
 {
-    char pattern[256];
-    sprintf(pattern, "^\\s*%s\\s*$(?:.|\\s)*?^\\s*%s\\s*$", TAG_INHERIT_START, TAG_INHERIT_END);
+    std::regex start_pattern("\\s*" + std::string(TAG_INHERIT_START) + "\\s*");
+    std::regex end_pattern("\\s*" + std::string(TAG_INHERIT_END) + "\\s*");
 
-    regex re(pattern, regex::ECMAScript);
-    cmatch m;
+    std::stringstream section;
+    std::string line;
 
+    std::stringstream in(source);
+    bool inside = false;
+    while (std::getline(in, line, '\n')) {
+      if (inside) {
+        section << line << std::endl;
+        if (std::regex_match(line, end_pattern))
+        {
+          strcat(target, section.str().c_str());
+          section = std::stringstream(); // reset stream
+          inside = false;
+        }
+      }
+      else {
+        if (std::regex_match(line, start_pattern))
+        {
+          section << line << std::endl;
+          inside = true;
+        }
+      }
+    } 
+/*
+  // old regex version kept for reference: 
+  // When character count between sections is exceeding some hundred characters, it becomes too complex
+  // and results in exception "error_stack", e.g. stack is limited to e.g. 600 steps
+  /6 diring regex evaluation
+
+  char pattern[256];
+  sprintf(pattern, "^\\s*%s\\s*$(?:.|\\s)*?^\\s*%s\\s*$", TAG_INHERIT_START, TAG_INHERIT_END);
+  // ^\s*### inherit start ###\s*$(?:.|\s)*?^\s*### inherit end ###\s*$
+  regex re(pattern, regex::ECMAScript);
+  cmatch m;
+
+  try {
+    // copy (optionally multiple) inherit start-end sections
     while (regex_search(source, m, re))
     {
-        strncat(target, m[0].first, m[0].length());
-        strcat(target, "\n");
-        source = m[0].second;
+      strncat(target, m[0].first, m[0].length()); // first start section-end section, inclusive start-end tags
+      strcat(target, "\n");
+      source = m[0].second; // pointer to after the first end section
     }
-
+  }
+  catch (const std::regex_error& e)
+  {
+    if (e.code() == std::regex_constants::error_complexity)
+      throw AvisynthError("MP_Pipeline: error in regex parsing 'inherit block': The complexity of an attempted match against a regular expression exceeded a pre-set level.");
+    else if (e.code() == std::regex_constants::error_stack)
+      throw AvisynthError("MP_Pipeline: error in regex parsing 'inherit block': There was insufficient memory to determine whether the regular expression could match the specified character sequence.");
+    std::string err = "MP_Pipeline: Error in regex library while copying 'inherit block':\n" + std::string(e.what())
+      + "\nCode:" + std::string(std::to_string(e.code()));
+    throw AvisynthError(err.c_str());
+  }
+*/
     // Ensure last is a clip even after LoadPlugin() calls
     strcat(target, "\nlast\n");
 }
