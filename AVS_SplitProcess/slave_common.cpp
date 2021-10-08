@@ -5,6 +5,7 @@
 
 #include <Windows.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "slave_common.h"
 
@@ -139,23 +140,52 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
             // unexpectedly terminates
         }
 
+        // short temp buffer to get the "hello I'm here" aka SLAVE_OK_FLAG string
         memset(error_msg, 0, error_msg_len);
         DWORD bytes_read = 0;
+        const size_t SLAVE_OK_FLAG_LEN = strlen(SLAVE_OK_FLAG);
+
+        // CHECKED: do { } while(0);
         CHECKED(ReadFile, pipe_stdout_read, error_msg, (DWORD)error_msg_len - 1, &bytes_read, NULL);
-        if (memcmp(error_msg, SLAVE_OK_FLAG, strlen(SLAVE_OK_FLAG)) == 0)
+        if (memcmp(error_msg, SLAVE_OK_FLAG, SLAVE_OK_FLAG_LEN) == 0)
         {
             success = true;
+            // ez tér vissza
         } else {
+            // de ha ez a rész nincs itt, akkor sem jó a libawvideosource + index
             DWORD cur_bytes_read = 0;
-            do 
+            bool read_more;
+            do
             {
+              do
+              {
+                cur_bytes_read = 0;
                 if (ReadFile(pipe_stdout_read, error_msg + bytes_read, (DWORD)(error_msg_len - 1 - bytes_read), &cur_bytes_read, NULL))
                 {
-                    bytes_read += cur_bytes_read;
-                } else {
-                    break;
+                  bytes_read += cur_bytes_read;
                 }
-            } while (cur_bytes_read > 0 && bytes_read < error_msg_len -1);
+                else {
+                  break;
+                }
+              } while (cur_bytes_read > 0 && bytes_read < error_msg_len - 1);
+              if (strstr(error_msg, SLAVE_OK_FLAG) != nullptr)
+              {
+                success = true;
+                break;
+              }
+              read_more = bytes_read >= error_msg_len - 1;
+              if (read_more) {
+                // cyclic buffer, copy its end to the beginning, to prevent
+                // missing of a half-cut SLAVE_OK_FLAG string
+                memcpy(error_msg, error_msg + error_msg_len - 1 - SLAVE_OK_FLAG_LEN, SLAVE_OK_FLAG_LEN);
+                memset(error_msg + SLAVE_OK_FLAG_LEN, 0, error_msg_len - SLAVE_OK_FLAG_LEN);
+                bytes_read = SLAVE_OK_FLAG_LEN;
+              }
+              else {
+                memset(error_msg, 0, error_msg_len);
+                bytes_read = 0;
+              }
+            } while (read_more);
         }
         CloseHandle(pipe_stdout_read);
         pipe_stdout_read = NULL;
