@@ -5,10 +5,16 @@ Plugin for Avisynth
 Copy files from x86 (or x86_xp) folder to the plugins directory for 32 bits plugins
 Copy files from x64 (or x64_xp) folder to the plugins directory for 64 bits plugins
 
-MP_Pipeline 0.22
+MP_Pipeline 0.23
 
 #######################################################
 Change log:
+
+0.23 (20211008) pinterf
+* Adapt to post-3.7.1test17 arrays: named arrays are undefined if they are not given like any other named parameter type.
+  Code was explicitely checked for array-ness.
+  (case of MPP_SharedMemoryServer  [aux_clips]c*, becasue Avisynth differs between an explicite zero sized array parameter
+   and a not-given parameter. Internally generated MPP script does not pass the parameter by default)
 
 0.22 (20201115) pinterf
 * Fix crash when there were too many characters (over some hundred) in script between
@@ -84,7 +90,7 @@ Mod:
 https://github.com/pinterf/MP_Pipeline
 
 Copyleft 2011-2012 SAPikachu (sapikachu@gmail.com, http://www.sapikachu.net)
-Additonal work 2018 realfinder, 2020 by pinterf
+Additonal work 2018 realfinder, 2020-21 by pinterf
 Licensed under GPL (http://www.gnu.org/copyleft/gpl.html).
 
 Links:
