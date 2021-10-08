@@ -19,6 +19,8 @@ AVSValue __cdecl Create_SharedMemoryServer(AVSValue args, void* user_data, IScri
 {
     SharedMemoryServer_parameter_storage_t params(args);
     AVSValue aux_clips = ARG(aux_clips);
+    if (!aux_clips.Defined()) // a named [aux_clips]c* array can be undefined and not zero sized if not given since 3.7.1test17, prepare for that
+      aux_clips = AVSValue(NULL, 0); // zero sized intentionally
     assert(aux_clips.IsArray());
     int array_size = aux_clips.ArraySize();
     if (array_size > 8)
