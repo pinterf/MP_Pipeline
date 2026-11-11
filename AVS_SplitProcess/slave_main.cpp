@@ -139,7 +139,11 @@ int _tmain(int argc, _TCHAR* argv[])
         return 10;
     }
 
-    const int ASK_FOR_INTERFACE_VERSION = AVISYNTH_CLASSIC_INTERFACE_VERSION; // AVS2.6 and AVS+ 3.5.0: 6, AVS+ 3.5.1: 6
+    // Minimum required version: 6 (AviSynth 2.6 and any AviSynth+).
+    // For a C++ host AviSynth+ returns the same full environment for any request between 6 and its
+    // current version, so asking for 6 does not disable V8+ frame properties or V11+ 64 bit
+    // script types (long/double). Only 2.5 C++ hosts (<=3) and C API hosts (<11) get a narrowed env.
+    const int ASK_FOR_INTERFACE_VERSION = AVISYNTH_CLASSIC_INTERFACE_VERSION;
     IScriptEnvironment* env = create_script_env(ASK_FOR_INTERFACE_VERSION);
     {
         AVS_linkage = env->GetAVSLinkage();
