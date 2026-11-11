@@ -119,6 +119,13 @@ void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int cli
         info.frame_response[1].frame_number = -1;
         info.frame_buffer_offset[1] = mapping_size + CACHE_LINE_SIZE * 2;
         mapping_size = aligned(mapping_size + clip_buffer_size + 2048);
+
+        // inline frame property areas, with the same guard byte spacing
+        for (int i = 0; i < 2; i++)
+        {
+            info.props_inline_offset[i] = mapping_size + CACHE_LINE_SIZE * 2;
+            mapping_size = aligned(mapping_size + PROPS_INLINE_SIZE + 2048);
+        }
     }
 
     _mapping_handle.replace(CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, mapping_size, mapping_name));
@@ -141,8 +148,11 @@ void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int cli
     memcpy(header->clips, &info_array[0], clip_info_size);
     for (int i = 0; i < clip_count; i++)
     {
-        add_guard_bytes((unsigned char*)header + header->clips[i].frame_buffer_offset[0], header->clips[i].frame_buffer_size);
-        add_guard_bytes((unsigned char*)header + header->clips[i].frame_buffer_offset[1], header->clips[i].frame_buffer_size);
+        for (int j = 0; j < 2; j++)
+        {
+            add_guard_bytes(frame_buffer(i, j), header->clips[i].frame_buffer_size);
+            add_guard_bytes(props_inline_area(i, j), PROPS_INLINE_SIZE);
+        }
     }
 
 }
@@ -162,9 +172,8 @@ void SharedMemorySourceManager::check_data_buffer_integrity(int clip_index, int 
 {
     assert(clip_index >= 0 && clip_index < header->clip_count);
     assert(response_object_id >= 0 && response_object_id <= 1);
-    check_guard_bytes(
-        (unsigned char*)header + header->clips[clip_index].frame_buffer_offset[response_object_id], 
-        header->clips[clip_index].frame_buffer_size);
+    check_guard_bytes(frame_buffer(clip_index, response_object_id), header->clips[clip_index].frame_buffer_size);
+    check_guard_bytes(props_inline_area(clip_index, response_object_id), PROPS_INLINE_SIZE);
 }
 
 void SharedMemorySourceManager::signal_shutdown()
@@ -253,7 +262,8 @@ sys_string get_mapping_name(const sys_string& key)
 SharedMemorySourceManager::SharedMemorySourceManager(const sys_string key, int clip_count, const VideoInfo vi_array[]) :
     _is_server(true),
     _mapping_handle(NULL),
-    header(NULL)
+    header(NULL),
+    key(key)
 {
     if (clip_count <= 0)
     {
@@ -267,7 +277,8 @@ SharedMemorySourceManager::SharedMemorySourceManager(const sys_string key, int c
 SharedMemorySourceManager::SharedMemorySourceManager(const sys_string key) :
     _is_server(false),
     _mapping_handle(NULL),
-    header(NULL)
+    header(NULL),
+    key(key)
 {
     init_client(get_mapping_name(key).c_str());
     init_sync_objects(key, header->clip_count);

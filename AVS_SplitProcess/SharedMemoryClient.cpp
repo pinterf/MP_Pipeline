@@ -33,11 +33,24 @@ SharedMemoryClient::SharedMemoryClient(SharedMemoryClient_parameter_storage_t& o
     SharedMemoryClient_parameter_storage_t(o),
     _shutdown(false),
     _manager(get_shared_memory_key(_instance_key, _port)),
-    _vi(_manager.header->clips[_clip_index].vi)
+    _vi(_manager.header->clips[_clip_index].vi),
+    _props_caps(detect_frame_props_caps(env))
 {
     check_shutting_down(env);
     // we don't support audio
     _vi.audio_samples_per_second = 0;
+    for (int i = 0; i < 2; i++)
+    {
+        _props_readers[i].reset(new PropsReader(_manager.key, _clip_index, i));
+    }
+}
+
+void SharedMemoryClient::throw_if_props_error(const std::string& props_error, IScriptEnvironment* env)
+{
+    if (!props_error.empty())
+    {
+        env->ThrowError("SharedMemoryClient: frame properties: %s", props_error.c_str());
+    }
 }
 
 SharedMemoryClient::~SharedMemoryClient()
@@ -64,10 +77,10 @@ void SharedMemoryClient::check_shutting_down(IScriptEnvironment* env)
     }
 }
 
-PVideoFrame SharedMemoryClient::create_frame(int response_index, IScriptEnvironment* env)
+PVideoFrame SharedMemoryClient::create_frame(int response_index, IScriptEnvironment* env, std::string& props_error)
 {
     auto& clip = _manager.header->clips[_clip_index];
-    const unsigned char* buffer = (const unsigned char*)_manager.header + clip.frame_buffer_offset[response_index];
+    const unsigned char* buffer = _manager.frame_buffer(_clip_index, response_index);
     PVideoFrame frame = SafeNewVideoFrame(env, _vi);
 
     const int planesYUV[4] = { PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A };
@@ -84,6 +97,15 @@ PVideoFrame SharedMemoryClient::create_frame(int response_index, IScriptEnvironm
         if (_vi.NumComponents() == 4)
           copy_plane(frame, buffer + clip.frame_offset_a, clip.frame_pitch_a, _vi, planes[3]); // A
     }
+    try
+    {
+        _props_readers[response_index]->read(env, _props_caps, frame,
+            clip.frame_response[response_index].props, _manager.props_inline_area(_clip_index, response_index));
+    } catch (const std::exception& e) {
+        props_error = e.what();
+    } catch (const AvisynthError& e) {
+        props_error = e.msg;
+    }
     return frame;
 }
 
@@ -96,6 +118,7 @@ PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
     volatile auto& resp = _manager.header->clips[_clip_index].frame_response[response_index];
     CondVar& cond = *_manager.sync_groups[_clip_index]->response_conds[response_index];
     PVideoFrame frame = NULL;
+    std::string props_error;
     if (cond.lock.try_lock(SPIN_LOCK_UNIT * 5))
     {
         SpinLockContext<> ctx(cond.lock);
@@ -106,12 +129,13 @@ PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
             // don't change client count here since we didn't requested it
             TRACE("(Clip %d) Prefetch hit: %d", _clip_index, n);
             resp.prefetch_hit++;
-            frame = create_frame(response_index, env);
+            frame = create_frame(response_index, env, props_error);
         }
     }
     if (frame)
     {
         cond.signal.switch_to_other_side();
+        throw_if_props_error(props_error, env);
         return frame;
     }
     int request_seq = 0;
@@ -152,7 +176,7 @@ PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
                     // prefetched after request
                     resp.prefetch_hit += 100001;
                 }
-                frame = create_frame(response_index, env);
+                frame = create_frame(response_index, env, props_error);
                 bool server_got_our_request = true;
 
                 if (request.sequence_number == request_seq)
@@ -180,6 +204,8 @@ PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
                     // and other client can issue request now
                     _manager.request_cond->signal.stay_on_this_side();
                 }
+                // bookkeeping is complete, the slot locks are released by the scope guards
+                throw_if_props_error(props_error, env);
                 return frame;
             }
         }

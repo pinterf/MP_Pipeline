@@ -36,6 +36,9 @@ private:
     IScriptEnvironment* _env;
     FrameFetcher _fetcher;
     SharedMemorySourceManager _manager;
+    FramePropsCaps _props_caps;
+    // index: clip_index * 2 + response_index
+    std::vector<std::unique_ptr<PropsWriter> > _props_writers;
     OwnedHandle _thread_handle;
     std::vector<HANDLE> _activity_wait_handles;
     volatile bool _shutdown;

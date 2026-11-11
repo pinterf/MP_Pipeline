@@ -8,12 +8,15 @@
 #include "SpinLock.h"
 #include "CondVar.h"
 #include "slave_common.h"
+#include "PropsChannel.h"
 
 #include <string>
 #include <vector>
 #include <memory>
 
-static const unsigned int SHARED_MEMORY_SOURCE_SIGNATURE = 0x4d50534d;
+// change it whenever the layout below changes, so that mismatching server and client
+// binaries (e.g. a stale .win32/.win64 slave) fail cleanly instead of misreading the mapping
+static const unsigned int SHARED_MEMORY_SOURCE_SIGNATURE = 0x4d50534e;
 
 typedef enum _request_type_t
 {
@@ -54,6 +57,9 @@ typedef struct _frame_response_t
     bool is_prefetch;
     int prefetch_hit;
 
+    // frame properties of the frame in this response slot
+    props_slot_state_t props;
+
 } frame_response_t;
 
 typedef __declspec(align(64)) struct _shared_memory_clip_info_t
@@ -74,6 +80,9 @@ typedef __declspec(align(64)) struct _shared_memory_clip_info_t
     int frame_offset_u;
     int frame_offset_v;
     int frame_offset_a;
+
+    // relative to the beginning of the mapped region, PROPS_INLINE_SIZE bytes each
+    unsigned int props_inline_offset[2];
     // --------------------------------------
 
     // align the volatile part to beginning of a cache line, 
@@ -147,8 +156,19 @@ public:
     SharedMemorySourceManager(const sys_string key);
     ~SharedMemorySourceManager();
     shared_memory_source_header_t* header;
+    // base name of all kernel objects of this instance
+    const sys_string key;
 
     void check_data_buffer_integrity(int clip_index, int response_object_id);
+
+    unsigned char* frame_buffer(int clip_index, int response_index) const
+    {
+        return (unsigned char*)header + header->clips[clip_index].frame_buffer_offset[response_index];
+    }
+    unsigned char* props_inline_area(int clip_index, int response_index) const
+    {
+        return (unsigned char*)header + header->clips[clip_index].props_inline_offset[response_index];
+    }
 
     void signal_shutdown();
 

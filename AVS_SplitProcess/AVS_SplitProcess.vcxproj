@@ -344,6 +344,7 @@
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="SystemChar.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="PropsChannel.h" />
     <ClInclude Include="ThunkedInterleave.h" />
     <ClInclude Include="TwoSidedLock.h" />
     <ClInclude Include="utils.h" />
@@ -365,6 +366,7 @@
     <ClCompile Include="SpinLock.cpp" />
     <ClCompile Include="statement.cpp" />
     <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="PropsChannel.cpp" />
     <ClCompile Include="ThunkedInterleave.cpp" />
     <ClCompile Include="TwoSidedLock.cpp" />
     <ClCompile Include="utils.cpp" />

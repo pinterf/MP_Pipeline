@@ -211,8 +211,8 @@ bool SharedMemoryServer::try_prefetch_frame()
 
 void SharedMemoryServer::copy_frame(PVideoFrame frame, int clip_index, int response_index)
 {
-    const auto& clip = _manager.header->clips[clip_index];
-    unsigned char* buffer = (unsigned char*)_manager.header + clip.frame_buffer_offset[response_index];
+    auto& clip = _manager.header->clips[clip_index];
+    unsigned char* buffer = _manager.frame_buffer(clip_index, response_index);
 
     const int planesYUV[4] = { PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A };
     const int planesRGB[4] = { PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A };
@@ -229,6 +229,9 @@ void SharedMemoryServer::copy_frame(PVideoFrame frame, int clip_index, int respo
       if (clip.vi.NumComponents() == 4)
         copy_plane(buffer + clip.frame_offset_a, clip.frame_pitch_a, frame, clip.vi, planes[3]); // A
     }
+
+    _props_writers[clip_index * 2 + response_index]->write(_env, _props_caps, frame,
+        clip.frame_response[response_index].props, _manager.props_inline_area(clip_index, response_index));
 
     _manager.check_data_buffer_integrity(clip_index, response_index);
 }
@@ -411,8 +414,17 @@ SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, cons
     _env(env),
     _shutdown(false),
     _fetcher(clips, _max_cache_frames, _cache_behind, env),
-    _manager(get_shared_memory_key(_instance_key, _port), clip_count, vi_array)
+    _manager(get_shared_memory_key(_instance_key, _port), clip_count, vi_array),
+    _props_caps(detect_frame_props_caps(env))
 {
+    for (int i = 0; i < clip_count; i++)
+    {
+        for (int j = 0; j < 2; j++)
+        {
+            _props_writers.push_back(std::unique_ptr<PropsWriter>(new PropsWriter(_manager.key, i, j)));
+        }
+    }
+
     _activity_wait_handles.push_back(_fetcher.new_frame_in_cache_event.get());
 
     _activity_wait_handles.push_back(_manager.request_cond->signal.get_event_this_side());

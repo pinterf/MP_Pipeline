@@ -47,6 +47,9 @@
     <ClInclude Include="ThunkedInterleave.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="PropsChannel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="FrameFetcher.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -140,6 +143,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ThunkedInterleave.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PropsChannel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="FrameFetcher.cpp">
