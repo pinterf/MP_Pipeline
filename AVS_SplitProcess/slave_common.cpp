@@ -72,6 +72,7 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
     bool success = false;
     HANDLE pipe_stdin_read = NULL, pipe_stdin_write = NULL;
     HANDLE pipe_stdout_read = NULL, pipe_stdout_write = NULL;
+    HANDLE slave_process = NULL;
 
     WaitForSingleObject(_startup_mutex, INFINITE);
     __try
@@ -125,12 +126,12 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
         pipe_stdout_write = NULL;
 
         assert(params->slave_job_object);
+        slave_process = pi.hProcess; // kept until the end of the handshake, for its exit code
         result = AssignProcessToJobObject(params->slave_job_object, pi.hProcess);
         if (!result)
         {
             error_code = GetLastError();
         }
-        CloseHandle(pi.hProcess);
         if (!result)
         {
             assert(false);
@@ -140,52 +141,67 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
             // unexpectedly terminates
         }
 
-        // short temp buffer to get the "hello I'm here" aka SLAVE_OK_FLAG string
+        // Handshake: the slave prints SLAVE_OK_FLAG when its script is ready, or an error message
+        // and exits. Other output may come first (e.g. a source filter printing its indexing progress
+        // to stdout), so read until the flag shows up or the pipe is closed (slave exited).
+        // A long output is kept in a sliding window: the latest output, where an error message is.
         memset(error_msg, 0, error_msg_len);
-        DWORD bytes_read = 0;
         const size_t SLAVE_OK_FLAG_LEN = strlen(SLAVE_OK_FLAG);
-
-        // CHECKED: do { } while(0);
-        CHECKED(ReadFile, pipe_stdout_read, error_msg, (DWORD)error_msg_len - 1, &bytes_read, NULL);
-        if (memcmp(error_msg, SLAVE_OK_FLAG, SLAVE_OK_FLAG_LEN) == 0)
+        const size_t capacity = error_msg_len - 1;
+        size_t bytes_read = 0;
+        while (true)
         {
-            success = true;
-            // ez tér vissza
-        } else {
-            // de ha ez a rész nincs itt, akkor sem jó a libawvideosource + index
-            DWORD cur_bytes_read = 0;
-            bool read_more;
-            do
+            if (bytes_read >= capacity)
             {
-              do
-              {
-                cur_bytes_read = 0;
-                if (ReadFile(pipe_stdout_read, error_msg + bytes_read, (DWORD)(error_msg_len - 1 - bytes_read), &cur_bytes_read, NULL))
-                {
-                  bytes_read += cur_bytes_read;
-                }
-                else {
-                  break;
-                }
-              } while (cur_bytes_read > 0 && bytes_read < error_msg_len - 1);
-              if (strstr(error_msg, SLAVE_OK_FLAG) != nullptr)
-              {
+                // keep the last 3/4 (a half received flag included), drop the oldest output
+                const size_t keep = capacity * 3 / 4;
+                memmove(error_msg, error_msg + bytes_read - keep, keep);
+                memset(error_msg + keep, 0, error_msg_len - keep);
+                bytes_read = keep;
+            }
+            DWORD cur_bytes_read = 0;
+            if (!ReadFile(pipe_stdout_read, error_msg + bytes_read, (DWORD)(capacity - bytes_read), &cur_bytes_read, NULL) || cur_bytes_read == 0)
+            {
+                break; // pipe closed
+            }
+            bytes_read += cur_bytes_read;
+            if (bytes_read >= SLAVE_OK_FLAG_LEN && strstr(error_msg, SLAVE_OK_FLAG) != nullptr)
+            {
                 success = true;
                 break;
-              }
-              read_more = bytes_read >= error_msg_len - 1;
-              if (read_more) {
-                // cyclic buffer, copy its end to the beginning, to prevent
-                // missing of a half-cut SLAVE_OK_FLAG string
-                memcpy(error_msg, error_msg + error_msg_len - 1 - SLAVE_OK_FLAG_LEN, SLAVE_OK_FLAG_LEN);
-                memset(error_msg + SLAVE_OK_FLAG_LEN, 0, error_msg_len - SLAVE_OK_FLAG_LEN);
-                bytes_read = SLAVE_OK_FLAG_LEN;
-              }
-              else {
-                memset(error_msg, 0, error_msg_len);
-                bytes_read = 0;
-              }
-            } while (read_more);
+            }
+        }
+        if (!success)
+        {
+            // The slave reports its script error as the last thing it prints; drop preceding noise
+            const char* last_error = nullptr;
+            for (const char* p = strstr(error_msg, "Script error: "); p; p = strstr(p + 1, "Script error: "))
+            {
+                last_error = p;
+            }
+            if (last_error && last_error != error_msg)
+            {
+                memmove(error_msg, last_error, strlen(last_error) + 1);
+            }
+            size_t len = strlen(error_msg);
+            while (len > 0 && (error_msg[len - 1] == '\r' || error_msg[len - 1] == '\n' || error_msg[len - 1] == ' '))
+            {
+                error_msg[--len] = 0;
+            }
+            if (len == 0)
+            {
+                // nothing printed: crashed or killed, the exit code is all we have
+                DWORD exit_code = 0;
+                WaitForSingleObject(slave_process, 5000);
+                if (GetExitCodeProcess(slave_process, &exit_code) && exit_code != STILL_ACTIVE)
+                {
+                    _snprintf(error_msg, capacity, "The slave process exited without a message, exit code 0x%08lX.", exit_code);
+                }
+                else
+                {
+                    _snprintf(error_msg, capacity, "The slave process closed its output without a message.");
+                }
+            }
         }
         CloseHandle(pipe_stdout_read);
         pipe_stdout_read = NULL;
@@ -199,6 +215,10 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
     __finally
     {
         ReleaseMutex(_startup_mutex);
+        if (slave_process)
+        {
+            CloseHandle(slave_process);
+        }
         if (!success)
         {
             CloseHandle(pipe_stdin_read);
@@ -240,7 +260,7 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
         }
         sprintf_append(new_script, "function %s() {\n return %d \n}\n", GET_OUTPUT_PORT_FUNCTION_NAME, port);
 
-        char error_msg[1024];
+        char error_msg[4096];
         memset(error_msg, 0, sizeof(error_msg));
 
         slave_create_params new_params;
@@ -252,10 +272,8 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
         *slave_stdin_handle = create_slave_process(&new_params, error_msg, sizeof(error_msg));
         if (!*slave_stdin_handle)
         {
-            char error_buffer[1536];
-            memset(error_buffer, 0, sizeof(error_buffer));
-            sprintf(error_buffer, "%s: Unable to create slave process. Message: %s", params->filter_name, error_msg);
-            env->ThrowError(error_buffer);
+            // error_msg is the slave's output, never use it as a format string
+            env->ThrowError("%s: Unable to create slave process. Message: %s", params->filter_name, error_msg);
         }
 
         *new_slave_port = port;

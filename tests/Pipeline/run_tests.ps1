@@ -6,6 +6,8 @@
   For each bitness: writes _config.avsi (plugin path, log folder, platform of the
   cross-bitness slave), runs every *.avs scenario with AVSMeter and checks that its
   log has one " OK" line per frame.
+  error_*.avs scenarios must fail to load: their first line "# expect: <text>" is the
+  text the error message must contain.
   Needs the plugin built (Output\<platform>\<Configuration>) and AviSynth+ (V8+)
   installed for the tested bitness; cross_bitness.avs needs both.
 
@@ -87,6 +89,18 @@ foreach ($platform in $Platforms) {
     if (-not $finished) { Write-Host ("  {0,-16} FAIL (timeout)" -f $scenario); $failed++; continue }
 
     $problems = @()
+    # AVSMeter wraps long lines at console width: compare with line breaks removed
+    $meterOut = ((Get-Content -Raw -ErrorAction SilentlyContinue (Join-Path $logDir "$scenario.meter.txt")) + `
+      (Get-Content -Raw -ErrorAction SilentlyContinue (Join-Path $logDir "$scenario.meter.err.txt"))) -replace "\r?\n", ""
+    $expect = (Get-Content (Join-Path $here "$scenario.avs") -TotalCount 1) -replace "^# expect: ", ""
+    if ($scenario -like "error_*") {
+      # expected to fail to load, with this message
+      $logs = @()
+      if ($meterOut.IndexOf($expect, [StringComparison]::Ordinal) -lt 0) {
+        $problems += "expected error message not found: $expect"
+        if ($meterOut -match "(MP_Pipeline:.*?)(\(.*avs, line \d+\)|$)") { $problems += "got: $($Matches[1])" }
+      }
+    }
     foreach ($l in $logs) {
       $logFile = Join-Path $logDir "$l.log"
       if (-not (Test-Path $logFile)) { $problems += "$l.log missing"; continue }
@@ -109,8 +123,9 @@ foreach ($platform in $Platforms) {
       $failed++
       Write-Host ("  {0,-16} FAIL" -f $scenario)
       $problems | ForEach-Object { Write-Host "      $_" }
-      $err = Get-Content -Raw -ErrorAction SilentlyContinue (Join-Path $logDir "$scenario.meter.txt")
-      if ($err -match "(?s)(Error.*?)(\r?\n\r?\n|$)") { Write-Host "      AVSMeter: $($Matches[1].Trim())" }
+      if ($scenario -notlike "error_*" -and $meterOut -match "Loading script\.\.\.\s*(.+?)(\(.*avs, line \d+\)|$)") {
+        Write-Host "      AVSMeter: $($Matches[1].Trim())"
+      }
     }
   }
 }
