@@ -164,7 +164,7 @@
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <PreBuildEvent>
-      <Command>gen_filter_def.py</Command>
+      <Command>py -3 "$(ProjectDir)gen_filter_def.py"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /y "$(TargetPath)" "$(SolutionDir)Output\x64\$(Configuration)\$(TargetFileName).win32"</Command>
@@ -192,7 +192,7 @@
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
     <PreBuildEvent>
-      <Command>gen_filter_def.py</Command>
+      <Command>py -3 "$(ProjectDir)gen_filter_def.py"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /y "$(TargetPath)" "$(SolutionDir)Output\Win32\$(Configuration)\$(TargetFileName).win64"</Command>
@@ -220,7 +220,7 @@
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <PreBuildEvent>
-      <Command>gen_filter_def.py</Command>
+      <Command>py -3 "$(ProjectDir)gen_filter_def.py"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /y "$(TargetPath)" "$(SolutionDir)Output\x64\$(Configuration)\$(TargetFileName).win32"</Command>
@@ -249,7 +249,7 @@
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <PreBuildEvent>
-      <Command>gen_filter_def.py</Command>
+      <Command>py -3 "$(ProjectDir)gen_filter_def.py"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /y "$(TargetPath)" "$(SolutionDir)Output\x64\$(Configuration)\$(TargetFileName).win32"</Command>
@@ -276,7 +276,7 @@
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <PreBuildEvent>
-      <Command>gen_filter_def.py</Command>
+      <Command>py -3 "$(ProjectDir)gen_filter_def.py"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /y "$(TargetPath)" "$(SolutionDir)Output\Win32\$(Configuration)\$(TargetFileName).win64"</Command>
@@ -304,7 +304,7 @@
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <PreBuildEvent>
-      <Command>gen_filter_def.py</Command>
+      <Command>py -3 "$(ProjectDir)gen_filter_def.py"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /y "$(TargetPath)" "$(SolutionDir)Output\Win32\$(Configuration)\$(TargetFileName).win64"</Command>
@@ -325,6 +325,7 @@
     <ClInclude Include="CondVar.h" />
     <ClInclude Include="fast_memory_functions.h" />
     <ClInclude Include="FrameFetcher.h" />
+    <ClInclude Include="FrameProps.h" />
     <ClInclude Include="Handle.h" />
     <ClInclude Include="Lock.h" />
     <ClInclude Include="NonCopyableClassBase.h" />
@@ -352,6 +353,7 @@
     <ClCompile Include="avisynth_init.cpp" />
     <ClCompile Include="CondVar.cpp" />
     <ClCompile Include="FrameFetcher.cpp" />
+    <ClCompile Include="FrameProps.cpp" />
     <ClCompile Include="Lock.cpp" />
     <ClCompile Include="MP_Pipeline.cpp" />
     <ClCompile Include="SafeEnv.cpp" />
