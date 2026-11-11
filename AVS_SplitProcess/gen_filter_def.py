@@ -229,9 +229,16 @@ def generate_definition(filter_name, avs_name=None, *params):
    return OUTPUT_TEMPLATE.format(**format_params)
 
 def write_definition(filter_name, *params, **kwargs):
-    with open("{0}.def.h".format(filter_name), "w") as f:
-        f.write(
-            generate_definition(filter_name, kwargs.get("avs_name"), *params))
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "{0}.def.h".format(filter_name))
+    content = generate_definition(filter_name, kwargs.get("avs_name"), *params)
+    # don't touch unchanged files, it would force a rebuild of every dependent source
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            if f.read() == content:
+                return
+    with open(path, "w") as f:
+        f.write(content)
 
 if __name__ == "__main__":
     generate_output()
