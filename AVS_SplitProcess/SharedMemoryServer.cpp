@@ -400,7 +400,7 @@ void SharedMemoryServer::wait_for_activity()
     }
 }
 
-SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, const VideoInfo vi_array[], SharedMemoryServer_parameter_storage_t& o, IScriptEnvironment* env):
+SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, const VideoInfo vi_array[], const SharedMemoryServer_parameter_storage_t& o, IScriptEnvironment* env):
     SharedMemoryServer_parameter_storage_t(o),
     GenericVideoFilter(clips[0]),
     _thread_handle(NULL),

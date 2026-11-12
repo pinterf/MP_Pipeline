@@ -10,6 +10,7 @@
 #include "slave_common.h"
 #include "PropsChannel.h"
 
+#include <stddef.h>
 #include <string>
 #include <vector>
 #include <memory>
@@ -72,7 +73,9 @@ typedef struct _frame_response_t
 
 } frame_response_t;
 
-typedef __declspec(align(64)) struct _shared_memory_clip_info_t
+// alignas instead of __declspec(align): GCC ignores the latter here, which would give a
+// different layout than the MSVC builds (the other side of the mapping may be either)
+typedef struct alignas(64) _shared_memory_clip_info_t
 {
     // --- immutable after initialization ---
     VideoInfo vi;
@@ -98,8 +101,7 @@ typedef __declspec(align(64)) struct _shared_memory_clip_info_t
     // align the volatile part to beginning of a cache line, 
     // so only one cache line is affected when someone changes its content
     // (don't know whether it is necessary, but memory is cheap :P )
-    __declspec(align(64))
-    volatile struct
+    volatile struct alignas(64)
     {
         // response index:
         // LSB of the frame number is used as index to the array
@@ -167,6 +169,9 @@ typedef struct _shared_memory_source_header_t
 
 static_assert(member_size(shared_memory_source_header_t, object_state) == sizeof(long), "Size of object_state must be the same as size of long.");
 static_assert(member_size(shared_memory_clip_info_t, parity_response[0]) == sizeof(__int64), "Size of parity_response must be the same as size of __int64.");
+// the layout must be the same for every compiler and bitness (both sides of the mapping)
+static_assert(alignof(shared_memory_clip_info_t) == 64, "shared_memory_clip_info_t must be 64 byte aligned.");
+static_assert(offsetof(shared_memory_clip_info_t, parity_response) % 64 == 0, "The volatile part of shared_memory_clip_info_t must start on a cache line.");
 
 class ClipSyncGroup
 {

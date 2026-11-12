@@ -10,7 +10,7 @@
 class SharedMemoryServer : private SharedMemoryServer_parameter_storage_t, public GenericVideoFilter
 {
 public:
-    SharedMemoryServer(const PClip clips[], int clip_count, const VideoInfo vi_array[], SharedMemoryServer_parameter_storage_t& o, IScriptEnvironment* env);
+    SharedMemoryServer(const PClip clips[], int clip_count, const VideoInfo vi_array[], const SharedMemoryServer_parameter_storage_t& o, IScriptEnvironment* env);
     ~SharedMemoryServer();
 
     PVideoFrame __stdcall GetFrame(int n, IScriptEnvironment* env);

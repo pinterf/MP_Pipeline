@@ -1,9 +1,5 @@
 #pragma once
 
-#ifndef _MSC_VER
-#error This spin lock implementation supports MSVC only.
-#endif
-
 #include <Windows.h>
 #include <intrin.h>
 #include <assert.h>

@@ -14,13 +14,17 @@ static const int MAX_EXPORTED_CLIPS = 8;
 
 #define GET_OUTPUT_PORT_FUNCTION_NAME "MPP_GetOutputPort"
 
-#if defined(_M_IX86)
+#if defined(_M_IX86) || defined(__i386__)
 
 #define CURRENT_PLATFORM "win32"
 
-#elif defined(_M_X64)
+#elif defined(_M_X64) || defined(__x86_64__)
 
 #define CURRENT_PLATFORM "win64"
+
+#elif defined(_M_ARM64) || defined(__aarch64__)
+
+#define CURRENT_PLATFORM "arm64"
 
 #else
 

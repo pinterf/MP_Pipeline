@@ -6,11 +6,13 @@
 #include "statement.h"
 #include "utils.h"
 #include "trace.h"
+#include "ScopeExit.h"
 
 #include <regex>
 #include <sstream>
 #include <string>
 #include <functional>
+#include <algorithm>
 
 // For UUID functions
 #include <rpc.h>
@@ -69,7 +71,7 @@ MP_Pipeline::MP_Pipeline(const MP_Pipeline_parameter_storage_t& o, IScriptEnviro
     strncpy(_instance_id, (const char*)uuid_str, ARRAYSIZE(_instance_id) - 1);
     RpcStringFreeA(&uuid_str);
 
-    memset(&_slave_stdin_handles, NULL, sizeof(_slave_stdin_handles));
+    memset(&_slave_stdin_handles, 0, sizeof(_slave_stdin_handles));
 
     // the job object is used to make the system kill all slave processes if the main process is unexpectedly terminated
     _slave_job = CreateJobObject(NULL, NULL);
@@ -419,11 +421,11 @@ void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_coun
     {
         env->ThrowError("MP_Pipeline: Invalid thunk size: %d", thunk_size);
     }
-    *branch_line_ptr = NULL;
+    *branch_line_ptr = 0;
     size_t buffer_size = strlen(script) + 1024;
     int process_id = *slave_count;
     char* buffer = (char*)malloc(buffer_size);
-    __try
+    auto cleanup = make_scope_exit([&] { free(buffer); });
     {
         memset(buffer, 0, buffer_size);
 
@@ -444,7 +446,7 @@ void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_coun
             {
                 env->ThrowError("MP_Pipeline: Too many slaves.");
             }
-            *script_end = NULL;
+            *script_end = 0;
 
             sprintf_append(buffer, "function %s() {\n return %d \n}\n", GET_BRANCH_ID, i);
 
@@ -468,10 +470,6 @@ void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_coun
         }
         strcat(next_script, ")\n");
         end_get_upstream_clip_function(next_script);
-    }
-    __finally
-    {
-        free(buffer);
     }
 }
 
@@ -517,8 +515,8 @@ int get_cpu_arrangement(int* arrangement)
     int logical_processor_count = 0;
 
     PSYSTEM_LOGICAL_PROCESSOR_INFORMATION buffer = NULL;
-    __try
     {
+        auto cleanup = make_scope_exit([&] { free(buffer); });
         DWORD buffer_size = 0;
 
         while (true)
@@ -557,9 +555,6 @@ int get_cpu_arrangement(int* arrangement)
             buffer_size -= sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); 
         }
 
-    } __finally {
-        free(buffer);
-        buffer = NULL;
     }
 
     if (logical_processor_count <= 0)
@@ -584,7 +579,7 @@ int get_cpu_arrangement(int* arrangement)
 
     int current_group = 0;
     // fill the arrangement array, ensure different processes are spreaded over all available cores, aware of hyper-threading
-    for (int lp_i = 0; lp_i < min(usable_processor_count, MAX_CPU); lp_i++)
+    for (int lp_i = 0; lp_i < (std::min)(usable_processor_count, MAX_CPU); lp_i++)
     {
         while (true)
         {
@@ -628,7 +623,7 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
     char* current_script_part = NULL;
     char* next_script_part = NULL;
     int branch_ports[MAX_SLAVES + 1];
-    memset(branch_ports, NULL, sizeof(branch_ports));
+    memset(branch_ports, 0, sizeof(branch_ports));
     bool completed = false;
 
     cpu_arrangement_info_t cpu_arrangement_info;
@@ -638,7 +633,17 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
     assert(cpu_arrangement_info.cpu_count <= MAX_CPU);
     cpu_arrangement_info.current_index = 0;
 
-    __try
+    auto cleanup = make_scope_exit([&]
+    {
+        if (!completed) {
+            // Some error happened, terminate all slave processes
+            CloseHandle(_slave_job);
+            _slave_job = NULL;
+            close_slave_stdin_handles();
+        }
+        free(buffer_store);
+        free(script_dup);
+    });
     {
         size_t buffer_size = strlen(_script) + 256000;
         buffer_store = (char*)malloc(buffer_size * 2);
@@ -742,16 +747,5 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
         sprintf_append(current_script_part, "function %s() {}\n", LOAD_PLUGIN_FUNCTION_NAME);
         create_pipeline_finish(current_script_part, env);
         completed = true;
-    }
-    __finally
-    {
-        if (!completed) {
-            // Some error happened, terminate all slave processes
-            CloseHandle(_slave_job);
-            _slave_job = NULL;
-            close_slave_stdin_handles();
-        }
-        free(buffer_store);
-        free(script_dup);
     }
 }

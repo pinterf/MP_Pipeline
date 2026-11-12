@@ -9,6 +9,7 @@
 #include <string>
 
 #include "slave_common.h"
+#include "ScopeExit.h"
 
 #include "splitprocess.h"
 
@@ -26,14 +27,14 @@ int get_unused_port()
 
 #define TRACE_ERROR(format, ...) \
     do { \
-        TRACE(format, __VA_ARGS__); \
-        _snprintf(error_msg, error_msg_len, format, __VA_ARGS__); \
+        TRACE(format, ##__VA_ARGS__); \
+        _snprintf(error_msg, error_msg_len, format, ##__VA_ARGS__); \
     } while (0)
 
 #define CHECKED(name, ...) \
     do { \
         if (!name(__VA_ARGS__)) { \
-            TRACE_ERROR("(slave_common.cpp) %hs failed, code = %d", #name, GetLastError()); \
+            TRACE_ERROR("(slave_common.cpp) %hs failed, code = %lu", #name, GetLastError()); \
             return NULL; \
         } \
     } while (0)
@@ -41,11 +42,11 @@ int get_unused_port()
 HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t error_msg_len)
 {
     TCHAR slave_exec[32768];
-    memset(slave_exec, NULL, sizeof(slave_exec));
+    memset(slave_exec, 0, sizeof(slave_exec));
 
     if (!get_self_path(slave_exec, ARRAYSIZE(slave_exec) - 128))
     {
-        TRACE_ERROR("Unable to get path of slave executable, code = %d", GetLastError());
+        TRACE_ERROR("Unable to get path of slave executable, code = %lu", GetLastError());
         return NULL;
     }
     append_platform_if_needed(slave_exec, params->slave_platform);
@@ -61,7 +62,7 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
         HANDLE new_mutex = CreateMutex(NULL, FALSE, NULL);
         if (!new_mutex)
         {
-            TRACE_ERROR("CreateMutex failed, code = %d", GetLastError());
+            TRACE_ERROR("CreateMutex failed, code = %lu", GetLastError());
             return NULL;
         }
         if (InterlockedCompareExchangePointer(&_startup_mutex, new_mutex, NULL) != NULL)
@@ -76,7 +77,21 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
     HANDLE slave_process = NULL;
 
     WaitForSingleObject(_startup_mutex, INFINITE);
-    __try
+    auto cleanup = make_scope_exit([&]
+    {
+        ReleaseMutex(_startup_mutex);
+        if (slave_process)
+        {
+            CloseHandle(slave_process);
+        }
+        if (!success)
+        {
+            CloseHandle(pipe_stdin_read);
+            CloseHandle(pipe_stdin_write);
+            CloseHandle(pipe_stdout_read);
+            CloseHandle(pipe_stdout_write);
+        }
+    });
     {
         CHECKED(SetEnvironmentVariableA, SCRIPT_VAR_NAME_A, params->script);
         // NULL value removes the variable (failure is fine when it did not exist)
@@ -94,8 +109,8 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
 
         STARTUPINFO si;
         PROCESS_INFORMATION pi;
-        memset(&si, NULL, sizeof(si));
-        memset(&pi, NULL, sizeof(pi));
+        memset(&si, 0, sizeof(si));
+        memset(&pi, 0, sizeof(pi));
         si.cb = sizeof(si);
         si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
         si.hStdInput = pipe_stdin_read;
@@ -117,7 +132,7 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
                 // Maybe the parent job doesn't have JOB_OBJECT_LIMIT_BREAKAWAY_OK
                 CHECKED(CreateProcess, slave_exec, NULL, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
             } else {
-                TRACE_ERROR("CreateProcess failed, code = %d", error_code);
+                TRACE_ERROR("CreateProcess failed, code = %lu", error_code);
                 return NULL;
             }
         }
@@ -138,7 +153,7 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
         if (!result)
         {
             assert(false);
-            TRACE("AssignProcessToJobObject failed, code = %d", error_code);
+            TRACE("AssignProcessToJobObject failed, code = %lu", error_code);
             // don't return, this won't cause any error, it is just that
             // slave processes won't be killed if the main process 
             // unexpectedly terminates
@@ -215,21 +230,6 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
             return NULL;
         }
     }
-    __finally
-    {
-        ReleaseMutex(_startup_mutex);
-        if (slave_process)
-        {
-            CloseHandle(slave_process);
-        }
-        if (!success)
-        {
-            CloseHandle(pipe_stdin_read);
-            CloseHandle(pipe_stdin_write);
-            CloseHandle(pipe_stdout_read);
-            CloseHandle(pipe_stdout_write);
-        }
-    }
 }
 
 #undef TRACE_ERROR
@@ -277,19 +277,6 @@ static std::string collect_script_name_vars(IScriptEnvironment* env)
     return result;
 }
 
-// the environment variable content (UTF-16), new[] allocated, NULL when there is nothing to pass
-static wchar_t* script_name_vars_env_value(IScriptEnvironment* env)
-{
-    std::wstring wide = Utf8ToWideChar(collect_script_name_vars(env));
-    if (wide.empty())
-    {
-        return NULL;
-    }
-    wchar_t* copy = new wchar_t[wide.size() + 1];
-    memcpy(copy, wide.c_str(), (wide.size() + 1) * sizeof(wchar_t));
-    return copy;
-}
-
 void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new_slave_port, HANDLE* slave_stdin_handle)
 {
     *new_slave_port = 0;
@@ -297,9 +284,9 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
 
     size_t new_script_size = strlen(params->script) + 4096;
     char* new_script = new char[new_script_size];
-    // copied out of std::wstring: no C++ objects with destructors in a function with __try
-    wchar_t* script_name_vars = script_name_vars_env_value(env);
-    __try
+    auto cleanup = make_scope_exit([&] { delete[] new_script; });
+    // the environment variable content (UTF-16), empty when there is nothing to pass
+    const std::wstring script_name_vars = Utf8ToWideChar(collect_script_name_vars(env));
     {
         memset(new_script, 0, new_script_size);
         {
@@ -326,7 +313,7 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
         slave_create_params new_params;
         memcpy(&new_params, params, sizeof(new_params));
         new_params.script = new_script;
-        new_params.script_name_vars = script_name_vars;
+        new_params.script_name_vars = script_name_vars.empty() ? NULL : script_name_vars.c_str();
 
         TRACE("Creating slave, script: %hs", new_script);
 
@@ -338,10 +325,5 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
         }
 
         *new_slave_port = port;
-    }
-    __finally
-    {
-        delete[] new_script;
-        delete[] script_name_vars;
     }
 }

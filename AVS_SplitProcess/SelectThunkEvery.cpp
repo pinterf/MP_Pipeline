@@ -22,7 +22,7 @@ int roundup_div(int a, int b)
 }
 
 
-SelectThunkEvery::SelectThunkEvery(PClip child, SelectThunkEvery_parameter_storage_t& o, IScriptEnvironment* env) :
+SelectThunkEvery::SelectThunkEvery(PClip child, const SelectThunkEvery_parameter_storage_t& o, IScriptEnvironment* env) :
 GenericVideoFilter(child),
     SelectThunkEvery_parameter_storage_t(o)
 {

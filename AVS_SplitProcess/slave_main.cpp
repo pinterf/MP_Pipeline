@@ -106,7 +106,7 @@ int silent_error_messages() {
     memset(modules, 0, sizeof(modules));
     if (!EnumProcessModules(GetCurrentProcess(), modules, sizeof(modules), &bytes_needed)) {
 #ifdef _DEBUG
-        error_box("EnumProcessModules failed (%d)", GetLastError());
+        error_box("EnumProcessModules failed (%lu)", GetLastError());
 #endif
         return 1;
     }
@@ -153,7 +153,7 @@ int _tmain(int argc, _TCHAR* argv[])
     memset(script, 0, sizeof(script));
     if (!GetEnvironmentVariable(SCRIPT_VAR_NAME, script, ARRAYSIZE(script) - 1))
     {
-      fprintf(stdout_file, "GetEnvironmentVariable failed, code = %d.\n", GetLastError());
+      fprintf(stdout_file, "GetEnvironmentVariable failed, code = %lu.\n", GetLastError());
         return 1;
     }
     if (strlen(script) == 0)
@@ -167,7 +167,7 @@ int _tmain(int argc, _TCHAR* argv[])
       fprintf(stdout_file, "Standard input not redirected.\n");
         return 5;
     } else if (stdin_handle == INVALID_HANDLE_VALUE) {
-      fprintf(stdout_file, "GetStdHandle failed, code = %d.\n", GetLastError());
+      fprintf(stdout_file, "GetStdHandle failed, code = %lu.\n", GetLastError());
         return 6;
     }
     const TCHAR* avisynth_module_name = TEXT("avisynth.dll"); // Default
@@ -179,13 +179,13 @@ int _tmain(int argc, _TCHAR* argv[])
     HMODULE avisynth_module = LoadLibrary(avisynth_module_name);
     if (!avisynth_module)
     {
-        fprintf(stdout_file, "Unable to load %s, code = %d\n", avisynth_module_name, GetLastError());
+        fprintf(stdout_file, "Unable to load %s, code = %lu\n", avisynth_module_name, GetLastError());
         return 9;
     }
     CreateScriptEnvironment_t create_script_env = (CreateScriptEnvironment_t)GetProcAddress(avisynth_module, "CreateScriptEnvironment");
     if (!create_script_env)
     {
-        fprintf(stdout_file, "%s doesn't contain entry point of CreateScriptEnvironment, code = %d\n", avisynth_module_name, GetLastError());
+        fprintf(stdout_file, "%s doesn't contain entry point of CreateScriptEnvironment, code = %lu\n", avisynth_module_name, GetLastError());
         return 10;
     }
 
@@ -231,7 +231,7 @@ int _tmain(int argc, _TCHAR* argv[])
         {
             if (!ReadFile(stdin_handle, dummy_buffer, sizeof(dummy_buffer), &bytes_read, NULL))
             {
-                fprintf(stdout_file, "ReadFile failed, code = %d.\n", GetLastError());
+                fprintf(stdout_file, "ReadFile failed, code = %lu.\n", GetLastError());
                 break;
             }
         } while (bytes_read > 0);

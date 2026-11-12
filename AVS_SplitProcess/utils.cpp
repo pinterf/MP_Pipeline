@@ -2,6 +2,7 @@
 
 #include "stdafx.h"
 #include "utils.h"
+#include <algorithm>
 
 int sprintf_append(char* buffer, const char* format, ...)
 {
@@ -31,8 +32,8 @@ bool get_self_path_a(char* buffer, DWORD buffer_size)
     {
         return false;
     }
-    buffer[0] = NULL;
-    buffer[buffer_size - 1] = NULL;
+    buffer[0] = 0;
+    buffer[buffer_size - 1] = 0;
     return !!GetModuleFileNameA(module, buffer, buffer_size - 1);
 }
 
@@ -47,8 +48,8 @@ bool get_self_path_w(wchar_t* buffer, DWORD buffer_size)
     {
         return false;
     }
-    buffer[0] = NULL;
-    buffer[buffer_size - 1] = NULL;
+    buffer[0] = 0;
+    buffer[buffer_size - 1] = 0;
     return !!GetModuleFileNameW(module, buffer, buffer_size - 1);
 }
 
@@ -73,7 +74,7 @@ void copy_plane(unsigned char* dst, int dst_pitch, const unsigned char* src, int
     assert(dst_pitch >= row_size && src_pitch >= row_size);
 
     // full aligned copy when possible, dst is always aligned so don't need to check it
-    int line_size = min(aligned(row_size, FRAME_ALIGN), src_pitch);
+    int line_size = (std::min)(aligned(row_size, FRAME_ALIGN), src_pitch);
 
     if (line_size == src_pitch && src_pitch == dst_pitch)
     {

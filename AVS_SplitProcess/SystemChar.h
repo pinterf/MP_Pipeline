@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 // workaround for mixed char & wchar_t environment
 
 

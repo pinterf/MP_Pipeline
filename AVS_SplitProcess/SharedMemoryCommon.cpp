@@ -352,7 +352,7 @@ SharedMemorySourceManager::~SharedMemorySourceManager()
                 {
                     continue;
                 }
-                DWORD exit_code = NULL;
+                DWORD exit_code = 0;
                 BOOL result = GetExitCodeProcess(process_handle.get(), &exit_code);
                 assert(result);
                 if (exit_code == STILL_ACTIVE)
@@ -373,7 +373,7 @@ SharedMemorySourceManager::~SharedMemorySourceManager()
         {
             if (header->client_process_ids[i] == process_id)
             {
-                header->client_process_ids[i] = NULL;
+                header->client_process_ids[i] = 0;
                 break;
             }
         }

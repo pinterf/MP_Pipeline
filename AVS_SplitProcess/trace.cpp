@@ -4,7 +4,7 @@
 #include "stdafx.h"
 #include "trace.h"
 
-void _trace(TCHAR *format, ...)
+void _trace(const TCHAR *format, ...)
 {
    TCHAR buffer[ 4096 ];
 
