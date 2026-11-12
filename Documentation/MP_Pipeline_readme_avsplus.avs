@@ -112,6 +112,7 @@ If thunk size is set to 1 or omitted, it will behave like using regular SelectEv
 ### platform: <win32|win64>
 
 Run the containing part of script on specified platform, so that you can use 32bit filter in 64bit main process, or vice vesa.
+Only one platform statement is allowed per block (more than one is an error).
 
 #######################################################
 
@@ -126,6 +127,7 @@ Note: Don't enable prefetching in processes that require random access (such as 
 ### export clip: <one or more clip variables separated by comma>
 
 Please see the example above for details.
+A block can export max. 8 clips (besides its result, last).
 
 #######################################################
 

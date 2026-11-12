@@ -22,6 +22,7 @@
 
 #define PLATFORM_SCAN_FORMAT "%16s"
 #define PLATFORM_PATTERN "^\\s*### platform:\\s*(\\w+)\\s*$"
+#define PLATFORM_STATEMENT_START "^[ \\t]*### platform:"
 
 #define PREFETCH_STATEMENT_START "^\\s*### prefetch:"
 #define PREFETCH_STATEMENT_PARAM "\\s*(\\d+)\\s*,\\s*(\\d+)\\s*$"
@@ -231,6 +232,19 @@ void prepare_export_clip(char* script, char* next_script, int process_id, int bl
     if (!result)
     {
         env->ThrowError("MP_Pipeline: Invalid export statement");
+    }
+    if (i > MAX_EXPORTED_CLIPS)
+    {
+        env->ThrowError("MP_Pipeline: script block %d exports %d clips, max. %d are allowed", block_number, i, MAX_EXPORTED_CLIPS);
+    }
+}
+
+// more than one platform statement: only the first one would be used, silently
+void check_single_platform(const char* script, int block_number, IScriptEnvironment* env)
+{
+    if (count_statements(script, PLATFORM_STATEMENT_START) > 1)
+    {
+        env->ThrowError("MP_Pipeline: script block %d has more than one ### platform statement", block_number);
     }
 }
 
@@ -666,6 +680,7 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
             copy_inherit_block(current_script_part, next_script_part);
 
             process_pass_clip_statement(current_script_part, next_script_part, env);
+            check_single_platform(current_script_part, block_number, env);
 
             if (has_statement(current_script_part, BRANCH_STATEMENT_START))
             {

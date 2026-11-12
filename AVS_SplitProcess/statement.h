@@ -9,3 +9,6 @@ bool scan_statement(const char* script, const char* regex_pattern, const char** 
 bool scan_statement(char* script, const char* regex_pattern, char** statement_pos_out, ...);
 
 bool has_statement(const char* script, const char* regex_pattern);
+
+// number of (non-overlapping) matches of the statement pattern
+int count_statements(const char* script, const char* regex_pattern);

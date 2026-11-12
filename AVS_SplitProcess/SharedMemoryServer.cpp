@@ -7,6 +7,7 @@
 #define TRACE_PREFIX L"SharedMemoryServer"
 #include "trace.h"
 #include "utils.h"
+#include "slave_common.h"
 #include <assert.h>
 #include <process.h>
 #include <exception>
@@ -23,9 +24,10 @@ AVSValue __cdecl Create_SharedMemoryServer(AVSValue args, void* user_data, IScri
       aux_clips = AVSValue(NULL, 0); // zero sized intentionally
     assert(aux_clips.IsArray());
     int array_size = aux_clips.ArraySize();
-    if (array_size > 8)
+    if (array_size > MAX_EXPORTED_CLIPS)
     {
-        env->ThrowError("SharedMemoryServer: Each process can only export no more than 8 clips.");
+        // MP_Pipeline checks it per script block already, this is for direct use
+        env->ThrowError("SharedMemoryServer: Each process can only export no more than %d clips.", MAX_EXPORTED_CLIPS);
     }
     unique_ptr<PClip[]> clips(new PClip[array_size + 2]);
     clips[0] = ARG(child).AsClip();

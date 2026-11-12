@@ -6,6 +6,9 @@
 
 static const int MAX_SLAVES = 255;
 
+// clips a process can export besides its result (### export clip)
+static const int MAX_EXPORTED_CLIPS = 8;
+
 
 #define MAX_PLATFORM_LENGTH 16
 

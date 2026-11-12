@@ -72,3 +72,10 @@ bool has_statement(const char* script, const char* regex_pattern)
 {
     return scan_statement(script, regex_pattern, NULL, NULL, NULL);
 }
+
+int count_statements(const char* script, const char* regex_pattern)
+{
+    regex re(regex_pattern, regex::ECMAScript | regex::icase);
+    auto begin = cregex_iterator(script, script + strlen(script), re);
+    return (int)distance(begin, cregex_iterator());
+}
