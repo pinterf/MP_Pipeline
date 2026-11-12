@@ -6,6 +6,8 @@
   For each bitness: writes _config.avsi (plugin path, log folder, platform of the
   cross-bitness slave), runs every *.avs scenario with AVSMeter and checks that its
   log has one " OK" line per frame.
+  A scenario stopping with Assert(false, "SKIP: <reason>") is reported as skipped
+  (e.g. it needs a newer AviSynth+ than the installed one).
   error_*.avs scenarios must fail to load: their first line "# expect: <text>" is the
   text the error message must contain.
   Needs the plugin built (Output\<platform>\<Configuration>) and AviSynth+ (V8+)
@@ -93,6 +95,11 @@ foreach ($platform in $Platforms) {
     # AVSMeter wraps long lines at console width: compare with line breaks removed
     $meterOut = ((Get-Content -Raw -ErrorAction SilentlyContinue (Join-Path $logDir "$scenario.meter.txt")) + `
       (Get-Content -Raw -ErrorAction SilentlyContinue (Join-Path $logDir "$scenario.meter.err.txt"))) -replace "\r?\n", ""
+    # a scenario not applicable to the installed AviSynth stops with Assert(false, "SKIP: <reason>")
+    if ($meterOut -match "SKIP: (.+?)\s*\(.*avs, line \d+\)") {
+      Write-Host ("  {0,-28} SKIP ({1})" -f $scenario, $Matches[1])
+      continue
+    }
     $expect = (Get-Content (Join-Path $here "$scenario.avs") -TotalCount 1) -replace "^# expect: ", ""
     if ($scenario -like "error_*") {
       # expected to fail to load, with this message

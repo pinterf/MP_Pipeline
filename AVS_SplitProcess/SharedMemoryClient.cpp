@@ -37,6 +37,23 @@ SharedMemoryClient::SharedMemoryClient(SharedMemoryClient_parameter_storage_t& o
     _props_caps(detect_frame_props_caps(env))
 {
     check_shutting_down(env);
+    if (is_v13_pixel_type(_vi.pixel_type))
+    {
+        // the VideoInfo functions of an older core don't know the format (and V13 linkage
+        // entries like VideoInfo::IsYA are missing there)
+        bool supported = true;
+        try
+        {
+            env->CheckVersion(13);
+        } catch (const AvisynthError&) {
+            supported = false;
+        }
+        if (!supported)
+        {
+            env->ThrowError("SharedMemoryClient: the upstream clip format (YA, 4:4:0, or 4:1:1 / 4:1:0 with alpha or more than 8 bits) "
+                "needs AviSynth+ interface V13 or later in this process.");
+        }
+    }
     // we don't support audio
     _vi.audio_samples_per_second = 0;
     for (int i = 0; i < 2; i++)
@@ -83,19 +100,11 @@ PVideoFrame SharedMemoryClient::create_frame(int response_index, IScriptEnvironm
     const unsigned char* buffer = _manager.frame_buffer(_clip_index, response_index);
     PVideoFrame frame = SafeNewVideoFrame(env, _vi);
 
-    const int planesYUV[4] = { PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A };
-    const int planesRGB[4] = { PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A };
-    const int* planes = _vi.IsYUV() || _vi.IsYUVA() ? planesYUV : planesRGB;
-    const bool isPackedRGB = _vi.IsRGB() && !_vi.IsPlanar();
-    const int plane0 = isPackedRGB ? PLANAR_Y : planes[0];
-
-    copy_plane(frame, buffer, clip.frame_pitch, _vi, plane0); // first or Y or G
-    if (_vi.IsPlanar() && !_vi.IsY())
+    int planes[4];
+    const int plane_count = get_transfer_planes(_vi, planes);
+    for (int p = 0; p < plane_count; p++)
     {
-        copy_plane(frame, buffer + clip.frame_offset_u, clip.frame_pitch_uv, _vi, planes[1]); // U or B
-        copy_plane(frame, buffer + clip.frame_offset_v, clip.frame_pitch_uv, _vi, planes[2]); // V or R
-        if (_vi.NumComponents() == 4)
-          copy_plane(frame, buffer + clip.frame_offset_a, clip.frame_pitch_a, _vi, planes[3]); // A
+        copy_plane(frame, buffer + plane_buffer_offset(clip, planes[p]), plane_buffer_pitch(clip, planes[p]), _vi, planes[p]);
     }
     try
     {

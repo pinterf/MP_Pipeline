@@ -18,6 +18,16 @@
 // binaries (e.g. a stale .win32/.win64 slave) fail cleanly instead of misreading the mapping
 static const unsigned int SHARED_MEMORY_SOURCE_SIGNATURE = 0x4d50534e;
 
+// Planes of a frame in the order they are stored in the shared frame buffer, returns their count:
+// packed formats (RGB24/32/48/64, YUY2) and Y: 1 (PLANAR_Y means the whole packed frame),
+// YA: Y, A; YUV(A): Y, U, V(, A); planar RGB(A): G, B, R(, A).
+// Uses only VideoInfo functions older than interface V13, also for the V13 formats.
+int get_transfer_planes(const VideoInfo& vi, int planes[4]);
+
+// pixel_type is a format introduced by AviSynth+ interface V13 (YA, 4:4:0, alpha or more than
+// 8 bits for 4:1:1 and 4:1:0); an older core in the process can't create its frames
+bool is_v13_pixel_type(int pixel_type);
+
 typedef enum _request_type_t
 {
     REQ_EMPTY = 0,
@@ -99,6 +109,28 @@ typedef __declspec(align(64)) struct _shared_memory_clip_info_t
         frame_response_t frame_response[2];
     };
 } shared_memory_clip_info_t;
+
+// position of a plane (one of get_transfer_planes) in a frame buffer of the clip
+inline int plane_buffer_offset(const shared_memory_clip_info_t& info, int plane)
+{
+    switch (plane)
+    {
+    case PLANAR_U: case PLANAR_B: return info.frame_offset_u;
+    case PLANAR_V: case PLANAR_R: return info.frame_offset_v;
+    case PLANAR_A: return info.frame_offset_a;
+    default: return 0; // Y, G, packed
+    }
+}
+
+inline int plane_buffer_pitch(const shared_memory_clip_info_t& info, int plane)
+{
+    switch (plane)
+    {
+    case PLANAR_U: case PLANAR_B: case PLANAR_V: case PLANAR_R: return info.frame_pitch_uv;
+    case PLANAR_A: return info.frame_pitch_a;
+    default: return info.frame_pitch;
+    }
+}
 
 typedef struct _shared_memory_source_header_t
 {

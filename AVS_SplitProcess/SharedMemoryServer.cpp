@@ -214,20 +214,11 @@ void SharedMemoryServer::copy_frame(PVideoFrame frame, int clip_index, int respo
     auto& clip = _manager.header->clips[clip_index];
     unsigned char* buffer = _manager.frame_buffer(clip_index, response_index);
 
-    const int planesYUV[4] = { PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A };
-    const int planesRGB[4] = { PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A };
-    const int* planes = clip.vi.IsYUV() || clip.vi.IsYUVA() ? planesYUV : planesRGB;
-
-    const bool isPackedRGB = clip.vi.IsRGB() && !clip.vi.IsPlanar();
-    const int plane0 = isPackedRGB ? PLANAR_Y : planes[0];
-
-    copy_plane(buffer, clip.frame_pitch, frame, clip.vi, plane0); //first or Y or G
-    if (clip.vi.IsPlanar() && !clip.vi.IsY())
+    int planes[4];
+    const int plane_count = get_transfer_planes(clip.vi, planes);
+    for (int p = 0; p < plane_count; p++)
     {
-      copy_plane(buffer + clip.frame_offset_u, clip.frame_pitch_uv, frame, clip.vi, planes[1]); // U or B
-      copy_plane(buffer + clip.frame_offset_v, clip.frame_pitch_uv, frame, clip.vi, planes[2]); // V or R
-      if (clip.vi.NumComponents() == 4)
-        copy_plane(buffer + clip.frame_offset_a, clip.frame_pitch_a, frame, clip.vi, planes[3]); // A
+        copy_plane(buffer + plane_buffer_offset(clip, planes[p]), plane_buffer_pitch(clip, planes[p]), frame, clip.vi, planes[p]);
     }
 
     _props_writers[clip_index * 2 + response_index]->write(_env, _props_caps, frame,

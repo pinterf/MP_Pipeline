@@ -12,6 +12,49 @@
 
 using namespace std;
 
+namespace {
+// format family without bit depth and plane order, see VideoInfo::IsYA etc. in the core
+inline int format_family(int pixel_type) { return pixel_type & VideoInfo::CS_PLANAR_MASK & ~VideoInfo::CS_Sample_Bits_Mask & VideoInfo::CS_PLANAR_FILTER; }
+inline bool is_family(int pixel_type, int generic) { return format_family(pixel_type) == (generic & VideoInfo::CS_PLANAR_FILTER); }
+}
+
+bool is_v13_pixel_type(int pixel_type)
+{
+    if (!(pixel_type & VideoInfo::CS_PLANAR))
+    {
+        return false;
+    }
+    if (is_family(pixel_type, VideoInfo::CS_GENERIC_YA) || is_family(pixel_type, VideoInfo::CS_GENERIC_YUV440) || is_family(pixel_type, VideoInfo::CS_GENERIC_YUVA440)
+        || is_family(pixel_type, VideoInfo::CS_GENERIC_YUVA411) || is_family(pixel_type, VideoInfo::CS_GENERIC_YUVA410))
+    {
+        return true;
+    }
+    // 8 bit 4:1:1 (YV411) and 4:1:0 (YUV9) are old formats
+    return (is_family(pixel_type, VideoInfo::CS_GENERIC_YUV411) || is_family(pixel_type, VideoInfo::CS_GENERIC_YUV410))
+        && (pixel_type & VideoInfo::CS_Sample_Bits_Mask) != VideoInfo::CS_Sample_Bits_8;
+}
+
+int get_transfer_planes(const VideoInfo& vi, int planes[4])
+{
+    if (!vi.IsPlanar() || vi.IsY())
+    {
+        planes[0] = PLANAR_Y;
+        return 1;
+    }
+    if (is_family(vi.pixel_type, VideoInfo::CS_GENERIC_YA))
+    {
+        planes[0] = PLANAR_Y;
+        planes[1] = PLANAR_A;
+        return 2;
+    }
+    const bool yuv = vi.IsYUV() || vi.IsYUVA();
+    planes[0] = yuv ? PLANAR_Y : PLANAR_G;
+    planes[1] = yuv ? PLANAR_U : PLANAR_B;
+    planes[2] = yuv ? PLANAR_V : PLANAR_R;
+    planes[3] = PLANAR_A;
+    return vi.IsYUVA() || vi.IsPlanarRGBA() ? 4 : 3;
+}
+
 ClipSyncGroup::ClipSyncGroup(const sys_string& name, int clip_index, shared_memory_clip_info_t& clip_info, bool is_server)
 {
     for (int i = 0; i < 2; i++)
@@ -87,27 +130,29 @@ void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int cli
         DWORD clip_buffer_size = aligned(info.vi.RowSize()) * info.vi.height;
         info.frame_pitch = aligned(info.vi.RowSize(), FRAME_ALIGN);
 
-        if (info.vi.IsPlanar() && !info.vi.IsY())
+        int planes[4];
+        const int plane_count = get_transfer_planes(info.vi, planes);
+        // planes after the first one: [U, V] or [B, R], then A (YA: only A)
+        for (int p = 1; p < plane_count; p++)
         {
-          const int planesYUV[4] = { PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A };
-          const int planesRGB[4] = { PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A };
-          const int* planes = info.vi.IsYUV() || info.vi.IsYUVA() ? planesYUV : planesRGB;
-
-          DWORD y_size = clip_buffer_size;
-          int uv_height = info.vi.height >> info.vi.GetPlaneHeightSubsampling(planes[1]);
-          int uv_row_size = info.vi.RowSize(planes[1]);
-          clip_buffer_size += aligned(uv_row_size) * uv_height * 2;
-
-          int a_height = info.vi.NumComponents() == 4 ? info.vi.height : 0;
-          int a_row_size = info.vi.RowSize(planes[3]);
-          clip_buffer_size += aligned(a_row_size) * a_height;
-
-          info.frame_pitch_uv = aligned(uv_row_size, FRAME_ALIGN);
-          info.frame_offset_u = y_size;
-          info.frame_offset_v = y_size + info.frame_pitch_uv * uv_height;
-
-          info.frame_pitch_a = aligned(a_row_size, FRAME_ALIGN);
-          info.frame_offset_a = info.frame_offset_v + info.frame_pitch_uv * uv_height;
+          const int plane = planes[p];
+          const int row_size = info.vi.RowSize(plane);
+          const int height = (plane == PLANAR_U || plane == PLANAR_V)
+            ? info.vi.height >> info.vi.GetPlaneHeightSubsampling(plane)
+            : info.vi.height;
+          const int pitch = aligned(row_size, FRAME_ALIGN);
+          if (plane == PLANAR_A)
+          {
+            info.frame_pitch_a = pitch;
+            info.frame_offset_a = clip_buffer_size;
+          } else {
+            info.frame_pitch_uv = pitch;
+            if (plane == PLANAR_U || plane == PLANAR_B)
+              info.frame_offset_u = clip_buffer_size;
+            else
+              info.frame_offset_v = clip_buffer_size;
+          }
+          clip_buffer_size += pitch * height;
         }
         info.frame_buffer_size = clip_buffer_size;
 

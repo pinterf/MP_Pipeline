@@ -158,6 +158,15 @@ string/data properties), or for comparison when something seems wrong.
 
 #######################################################
 
+Pixel formats (AviSynth+)
+
+All AviSynth+ pixel formats can be passed between the processes, also the ones introduced
+with interface version 13: YA (Y plus alpha), 4:4:0, and 4:1:1 / 4:1:0 with more than 8 bits
+or with alpha. Such a clip needs AviSynth+ with interface version 13 or later in the
+receiving process as well, otherwise the script stops with an error message.
+
+#######################################################
+
 Frame properties (AviSynth+)
 
 Frame properties travel with the frames between the processes, in both directions of
