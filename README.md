@@ -4,6 +4,9 @@ Plugin for Avisynth
 
 Copy files from x86 (or x86_xp) folder to the plugins directory for 32 bits plugins
 Copy files from x64 (or x64_xp) folder to the plugins directory for 64 bits plugins
+Keep all four files of a folder together: MP_Pipeline.dll and MP_Pipeline.dll.slave.exe, and
+the other bitness pair (.win64 / .win32 files) used by "### platform" blocks of the other bitness.
+Mixed bitness needs both the 32 and 64 bit AviSynth to be installed.
 The _xp builds run on Windows XP as well (Visual C++ v141_xp toolset).
 
 MP_Pipeline 2.0
@@ -54,6 +57,9 @@ Change log:
   Visual Studio 2022, VS 2026 has no v141_xp toolset. Fix: building the solution in ReleaseXP
   configuration built the Release (non-XP) projects.
 * Build: the filter definition generator runs with the Python launcher (py -3)
+* Source: standard C++ instead of MSVC-only constructs (__try/__finally, temporaries bound to non-const
+  references, __declspec(align)); builds with ClangCL as well, compiles with MinGW GCC and llvm-mingw
+  (x86, x64, aarch64). The shared memory layout is the same with every compiler (compile-time checks).
 * Documentation: frame properties, pixel formats, ### frame props statement;
   new demo script Documentation/MP_Pipeline_frameprops_demo.avs
 * Tests: tests/Pipeline (AVSMeter based pipeline tests, run_tests.ps1) and tests/FrameProps
