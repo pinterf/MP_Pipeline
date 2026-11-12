@@ -45,6 +45,9 @@ Change log:
   message is shown now, or its exit code.
 * Clear error messages instead of "Invalid arguments to function 'MPP_PrepareDownstreamClip'":
   "script block N must end with a clip" and "script block N: exported variable 'x' is not a clip"
+* Exporting more than 8 clips from a block: the error message tells the block number and the count
+  ("script block N exports X clips, max. 8 are allowed"), it is checked before any slave starts
+* More than one "### platform" statement in a block is an error (the first one was used silently)
 * AviSynth+ headers updated to interface V14
 * Build: the filter definition generator runs with the Python launcher (py -3)
 * Documentation: frame properties, pixel formats, ### frame props statement;
