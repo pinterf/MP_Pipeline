@@ -197,12 +197,33 @@ void process_pass_clip_statement(char* script, char* next_script, IScriptEnviron
     }
 }
 
-void prepare_export_clip(char* script, char* next_script, int process_id, IScriptEnvironment* env)
+// Script lines failing with a readable message when 'value' (a variable name or "last") is
+// undefined or not a clip, instead of "Invalid arguments to function 'MPP_PrepareDownstreamClip'".
+// try/catch, IsClip and Assert exist in AviSynth 2.6 too.
+void append_clip_check(char* script, const char* value, const char* message)
+{
+    sprintf_append(script, "try { MPP_Checked = %s } catch (MPP_Error) { MPP_Checked = 0 }\n", value);
+    sprintf_append(script, "Assert(IsClip(MPP_Checked), \"%s\")\n", message);
+}
+
+// prepares 'last' for the downstream process, last statement of a slave script part
+void append_prepare_last(char* script, int block_number)
+{
+    char message[128];
+    _snprintf_s(message, _TRUNCATE, "MP_Pipeline: script block %d must end with a clip", block_number);
+    append_clip_check(script, "last", message);
+    sprintf_append(script, "MPP_Checked.%s()\n", PREPARE_DOWNSTREAM_CLIP_FUNCTION_NAME);
+}
+
+void prepare_export_clip(char* script, char* next_script, int process_id, int block_number, IScriptEnvironment* env)
 {
     int i = 0;
     bool result = process_export_clip_statement(script, [=, &i] (const char* clip_var_name) {
         i++;
-        sprintf_append(script, "%s = %s.%s()\n", clip_var_name, clip_var_name, PREPARE_DOWNSTREAM_CLIP_FUNCTION_NAME);
+        char message[256];
+        _snprintf_s(message, _TRUNCATE, "MP_Pipeline: script block %d: exported variable '%s' is not a clip", block_number, clip_var_name);
+        append_clip_check(script, clip_var_name, message);
+        sprintf_append(script, "%s = MPP_Checked.%s()\n", clip_var_name, PREPARE_DOWNSTREAM_CLIP_FUNCTION_NAME);
         sprintf_append(next_script, "%s = %s_%d(%d) ", clip_var_name, GET_UPSTREAM_CLIP_FUNCTION_NAME, process_id, i);
         append_import_clip_signature(next_script, clip_var_name);
         strcat(next_script, "\n");
@@ -360,7 +381,7 @@ void end_prepare_downstream_clip_function(char* script)
     strcat(script, "}\n");
 }
 
-void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_count, cpu_arrangement_info_t* cpu_arrangement_info, IScriptEnvironment* env)
+void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_count, int block_number, cpu_arrangement_info_t* cpu_arrangement_info, IScriptEnvironment* env)
 {
     int branch_count = 0;
     char* thunk_size_str = NULL;
@@ -393,8 +414,9 @@ void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_coun
         memset(buffer, 0, buffer_size);
 
         const char* GET_BRANCH_ID = "MPP_GetBranchID";
-        _snprintf(buffer, buffer_size, "global MP_PIPELINE_BRANCH_ID = %s()\n%s\n%s()\n", GET_BRANCH_ID, script, PREPARE_DOWNSTREAM_CLIP_FUNCTION_NAME);
-        prepare_export_clip(buffer, next_script, process_id, env);
+        _snprintf(buffer, buffer_size, "global MP_PIPELINE_BRANCH_ID = %s()\n%s\n", GET_BRANCH_ID, script);
+        append_prepare_last(buffer, block_number);
+        prepare_export_clip(buffer, next_script, process_id, block_number, env);
         sprintf_append(buffer, "%s\n", branch_line_ptr + 1);
 
         char* script_end = buffer + strlen(buffer);
@@ -611,6 +633,7 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
         next_script_part = buffer_store + buffer_size;
         char* current_pos = script_dup;
         int slave_count = 0;
+        int block_number = 0; // 1-based, as the user sees the blocks (a branch is one block)
         int port = 0;
 
         sprintf(current_script_part, "%s()\n", LOAD_PLUGIN_FUNCTION_NAME);
@@ -619,6 +642,7 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
             sprintf(next_script_part, "%s()\n", LOAD_PLUGIN_FUNCTION_NAME);
 
             int process_id = slave_count;
+            block_number++;
             sprintf_append(next_script_part, "%s_%d(0)\n", GET_UPSTREAM_CLIP_FUNCTION_NAME, process_id);
 
             char* splitter_pos = NULL;
@@ -645,11 +669,11 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
 
             if (has_statement(current_script_part, BRANCH_STATEMENT_START))
             {
-                create_branch(current_script_part, next_script_part, &slave_count, &cpu_arrangement_info, env);
+                create_branch(current_script_part, next_script_part, &slave_count, block_number, &cpu_arrangement_info, env);
                 port = 0;
             } else {
-                sprintf_append(current_script_part, "%s()\n", PREPARE_DOWNSTREAM_CLIP_FUNCTION_NAME);
-                prepare_export_clip(current_script_part, next_script_part, process_id, env);
+                append_prepare_last(current_script_part, block_number);
+                prepare_export_clip(current_script_part, next_script_part, process_id, block_number, env);
 
                 begin_prepare_downstream_clip_function(current_script_part);
                 strcat(current_script_part, "return c\n");

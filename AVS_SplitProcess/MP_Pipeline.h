@@ -25,7 +25,7 @@ public:
 private:
     void create_pipeline(IScriptEnvironment* env);
 
-    void create_branch(char* script, char* next_script, int* slave_count, cpu_arrangement_info_t* cpu_arrangement_info, IScriptEnvironment* env);
+    void create_branch(char* script, char* next_script, int* slave_count, int block_number, cpu_arrangement_info_t* cpu_arrangement_info, IScriptEnvironment* env);
     void create_pipeline_finish(char* script, IScriptEnvironment* env);
 
     void prepare_slave(slave_create_params* params, cpu_arrangement_info_t* cpu_arrangement_info, IScriptEnvironment* env);
