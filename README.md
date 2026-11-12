@@ -5,7 +5,7 @@ Plugin for Avisynth
 Copy files from x86 (or x86_xp) folder to the plugins directory for 32 bits plugins
 Copy files from x64 (or x64_xp) folder to the plugins directory for 64 bits plugins
 
-MP_Pipeline 0.23
+MP_Pipeline 2.0
 
 Frame properties (AviSynth+)
 
@@ -21,6 +21,38 @@ tests/FrameProps (serializer unit test), see the comments in the files.
 
 #######################################################
 Change log:
+
+2.0 (20261112) pinterf
+* Frame properties are passed between the processes (AviSynth+, interface V8 or later on both sides),
+  also between win32 and win64, with branch, prefetch, export clip and pass clip.
+  Integer, float and data properties incl. arrays; the data type hint (binary/UTF-8) is kept when both
+  sides have interface V11 or later. Clip and frame typed properties are skipped.
+  Up to 4 KB of property data per frame travels with the frame, larger property sets use an extra
+  shared memory buffer per frame slot (grows, shrinks and is released on demand), max. 256 MB per frame.
+  MPP_TRACE_PROPS=1 environment variable: reports the extra buffer events with OutputDebugString.
+* New statement: ### frame props: on|off
+  "off" passes the frames of the block without frame properties (default: on).
+  (new MPP_SharedMemoryServer parameter: props)
+* Support the pixel formats of AviSynth+ interface V13: YA (Y plus alpha), 4:4:0, and 4:1:1 / 4:1:0
+  with more than 8 bits or with alpha. YA clips could not be passed before.
+  Such a clip needs AviSynth+ with interface V13 or later in the receiving process too, otherwise a
+  clear error message is shown.
+* ScriptDir(), ScriptFile(), ScriptName() and their Utf8 versions work in the slave processes too,
+  returning the values of the script calling MP_Pipeline (they were undefined in the slaves).
+  Also the SCRIPTDIR / MAINSCRIPTDIR prefixes of AddAutoloadDir.
+* Fix: empty "Unable to create slave process. Message:" when the slave failed after printing other
+  output (e.g. LSMash indexing progress), or when it exited without a message. The slave's last error
+  message is shown now, or its exit code.
+* Clear error messages instead of "Invalid arguments to function 'MPP_PrepareDownstreamClip'":
+  "script block N must end with a clip" and "script block N: exported variable 'x' is not a clip"
+* AviSynth+ headers updated to interface V14
+* Build: the filter definition generator runs with the Python launcher (py -3)
+* Documentation: frame properties, pixel formats, ### frame props statement;
+  new demo script Documentation/MP_Pipeline_frameprops_demo.avs
+* Tests: tests/Pipeline (AVSMeter based pipeline tests, run_tests.ps1) and tests/FrameProps
+  (frame property serializer unit test)
+* Development of this release was assisted by Claude Code (Anthropic, Claude Opus 5.5): code, tests and
+  documentation, based on pinterf's ideas and former test scripts, reviewed by pinterf
 
 0.23 (20211008) pinterf
 * Adapt to post-3.7.1test17 arrays: named arrays are undefined if they are not given like any other named parameter type.
@@ -102,7 +134,7 @@ Mod:
 https://github.com/pinterf/MP_Pipeline
 
 Copyleft 2011-2012 SAPikachu (sapikachu@gmail.com, http://www.sapikachu.net)
-Additonal work 2018 realfinder, 2020-21 by pinterf
+Additonal work 2018 realfinder, 2020-21, 2026 by pinterf
 Licensed under GPL (http://www.gnu.org/copyleft/gpl.html).
 
 Links:
