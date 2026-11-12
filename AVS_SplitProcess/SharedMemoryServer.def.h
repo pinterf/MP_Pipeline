@@ -9,11 +9,11 @@
 #include <stddef.h>
 #include "avisynth.h"
 
-static const char* SHAREDMEMORYSERVER_AVS_PARAMS = "csi[aux_clips]c*[max_cache_frames]i[cache_behind]i[fetcher_thread_lock_to_cpu]i[server_thread_lock_to_cpu]i";
+static const char* SHAREDMEMORYSERVER_AVS_PARAMS = "csi[aux_clips]c*[max_cache_frames]i[cache_behind]i[fetcher_thread_lock_to_cpu]i[server_thread_lock_to_cpu]i[props]b";
 
 typedef struct _SHAREDMEMORYSERVER_RAW_ARGS
 {
-    AVSValue child, instance_key, port, aux_clips, max_cache_frames, cache_behind, fetcher_thread_lock_to_cpu, server_thread_lock_to_cpu;
+    AVSValue child, instance_key, port, aux_clips, max_cache_frames, cache_behind, fetcher_thread_lock_to_cpu, server_thread_lock_to_cpu, props;
 } SHAREDMEMORYSERVER_RAW_ARGS;
 
 #define SHAREDMEMORYSERVER_ARG_INDEX(name) (offsetof(SHAREDMEMORYSERVER_RAW_ARGS, name) / sizeof(AVSValue))
@@ -30,6 +30,7 @@ protected:
     int _cache_behind; 
     int _fetcher_thread_lock_to_cpu; 
     int _server_thread_lock_to_cpu; 
+    bool _props; 
 
 public:
 
@@ -41,9 +42,10 @@ public:
         _cache_behind = o._cache_behind; 
         _fetcher_thread_lock_to_cpu = o._fetcher_thread_lock_to_cpu; 
         _server_thread_lock_to_cpu = o._server_thread_lock_to_cpu; 
+        _props = o._props; 
     }
 
-    SharedMemoryServer_parameter_storage_t( const char* instance_key, int port, int max_cache_frames, int cache_behind, int fetcher_thread_lock_to_cpu, int server_thread_lock_to_cpu )
+    SharedMemoryServer_parameter_storage_t( const char* instance_key, int port, int max_cache_frames, int cache_behind, int fetcher_thread_lock_to_cpu, int server_thread_lock_to_cpu, bool props )
     {
         _instance_key = instance_key; 
         _port = port; 
@@ -51,6 +53,7 @@ public:
         _cache_behind = cache_behind; 
         _fetcher_thread_lock_to_cpu = fetcher_thread_lock_to_cpu; 
         _server_thread_lock_to_cpu = server_thread_lock_to_cpu; 
+        _props = props; 
     }
 
     SharedMemoryServer_parameter_storage_t( AVSValue args )
@@ -61,10 +64,11 @@ public:
         _cache_behind = SHAREDMEMORYSERVER_ARG(cache_behind).AsInt(0);
         _fetcher_thread_lock_to_cpu = SHAREDMEMORYSERVER_ARG(fetcher_thread_lock_to_cpu).AsInt(-1);
         _server_thread_lock_to_cpu = SHAREDMEMORYSERVER_ARG(server_thread_lock_to_cpu).AsInt(-1);
+        _props = SHAREDMEMORYSERVER_ARG(props).AsBool(true);
     }
 };
 
-#define SHAREDMEMORYSERVER_CREATE_CLASS(klass) new klass( child, aux_clips, SharedMemoryServer_parameter_storage_t( instance_key, port, max_cache_frames, cache_behind, fetcher_thread_lock_to_cpu, server_thread_lock_to_cpu ) )
+#define SHAREDMEMORYSERVER_CREATE_CLASS(klass) new klass( child, aux_clips, SharedMemoryServer_parameter_storage_t( instance_key, port, max_cache_frames, cache_behind, fetcher_thread_lock_to_cpu, server_thread_lock_to_cpu, props ) )
 
 #ifdef SHAREDMEMORYSERVER_SIMPLE_MACRO_NAME
 

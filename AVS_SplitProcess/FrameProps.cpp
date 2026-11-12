@@ -10,6 +10,12 @@ namespace {
 
 inline size_t pad8(size_t n) { return (n + 7) & ~(size_t)7; }
 
+// The core stores the hint of propSetDataH unchecked: anything unknown becomes "unknown".
+inline int32_t valid_type_hint(int32_t hint)
+{
+    return hint == PROPDATATYPEHINT_BINARY || hint == PROPDATATYPEHINT_UTF8 ? hint : PROPDATATYPEHINT_UNKNOWN;
+}
+
 // Writes into a buffer, or only counts the bytes when the buffer is null.
 class Sink
 {
@@ -115,6 +121,13 @@ void check_int_size(size_t value, const char* what)
 
 } // namespace
 
+// Interface versions, checked against the AviSynth+ history (vtable order unchanged since):
+//   V8 (3.6.0): getFramePropsRO/RW, propNumKeys, propGetKey, propGetType, propNumElements,
+//       propGetIntArray, propGetFloatArray, propGetData, propGetDataSize, propDeleteKey,
+//       propSetIntArray, propSetFloatArray, propSetData. All of them came in the same commit,
+//       before the interface was bumped to 8.
+//   V11 (3.7.4): propGetDataTypeHint, propSetDataH; only called when has_type_hint.
+// Nothing else of the property API may be used here without a new capability flag.
 FramePropsCaps detect_frame_props_caps(IScriptEnvironment* env)
 {
     FramePropsCaps caps = { false, false };
@@ -228,10 +241,7 @@ size_t serialize_frame_props(IScriptEnvironment* env, const FramePropsCaps& caps
                 if (caps.has_type_hint)
                 {
                     hint = env->propGetDataTypeHint(map, key, i, &error);
-                    if (error)
-                    {
-                        hint = PROPDATATYPEHINT_UNKNOWN;
-                    }
+                    hint = error ? PROPDATATYPEHINT_UNKNOWN : valid_type_hint(hint);
                 }
                 out.put_value<uint32_t>((uint32_t)size);
                 out.put_value<int32_t>(hint);
@@ -327,7 +337,7 @@ void deserialize_frame_props(IScriptEnvironment* env, const FramePropsCaps& caps
             for (uint32_t i = 0; i < count && !failed; i++)
             {
                 const uint32_t size = body.get_value<uint32_t>();
-                const int32_t hint = body.get_value<int32_t>();
+                const int32_t hint = valid_type_hint(body.get_value<int32_t>());
                 check_int_size(size, key.c_str());
                 const char* data = (const char*)body.take(size);
                 body.align8();

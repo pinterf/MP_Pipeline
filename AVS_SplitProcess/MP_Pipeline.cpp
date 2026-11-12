@@ -39,6 +39,9 @@
 #define LOCK_THREADS_TO_CORES_START "^\\s*### lock threads to cores"
 #define LOCK_THREADS_TO_CORES_PARAM "\\s*(\\d+)\\s*$"
 
+#define FRAME_PROPS_STATEMENT_START "^\\s*### frame props:"
+#define FRAME_PROPS_STATEMENT_PARAM "\\s*(\\w+)\\s*$"
+
 #define LOAD_PLUGIN_FUNCTION_NAME "MPP_Load"
 #define GET_UPSTREAM_CLIP_FUNCTION_NAME "MPP_GetUpstreamClip"
 #define PREPARE_DOWNSTREAM_CLIP_FUNCTION_NAME "MPP_PrepareDownstreamClip"
@@ -252,6 +255,21 @@ void MP_Pipeline::prepare_slave(slave_create_params* params, cpu_arrangement_inf
         int server_cpu_index = cpu_arrangement_info->arrangement[cpu_arrangement_info->current_index];
         sprintf_append(params->script, ", fetcher_thread_lock_to_cpu=%d, server_thread_lock_to_cpu=%d", 
             fetcher_cpu_index, server_cpu_index);
+    }
+    if (has_statement(params->script, FRAME_PROPS_STATEMENT_START))
+    {
+        char value[8] = { 0 };
+        if (!scan_statement(params->script, FRAME_PROPS_STATEMENT_START FRAME_PROPS_STATEMENT_PARAM, NULL,
+            "%7s", value,
+            NULL, NULL) ||
+            (_stricmp(value, "on") != 0 && _stricmp(value, "off") != 0))
+        {
+            env->ThrowError("MP_Pipeline: Invalid frame props statement, use \"### frame props: on\" or \"### frame props: off\".");
+        }
+        if (_stricmp(value, "off") == 0)
+        {
+            strcat(params->script, ", props=false");
+        }
     }
     strcat(params->script, ")\n");
 

@@ -417,6 +417,11 @@ SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, cons
     _manager(get_shared_memory_key(_instance_key, _port), clip_count, vi_array),
     _props_caps(detect_frame_props_caps(env))
 {
+    if (!_props)
+    {
+        // "### frame props: off": the slot never carries properties, downstream frames get none
+        _props_caps.has_props = false;
+    }
     for (int i = 0; i < clip_count; i++)
     {
         for (int j = 0; j < 2; j++)

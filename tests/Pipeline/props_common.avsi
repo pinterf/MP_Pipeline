@@ -64,6 +64,11 @@ function PropsSrcFrame(int n, string order)
 
 function PropsCheckFrame(clip c, int n, string order)
 {
+  # "none": an upstream block has "### frame props: off", no property may arrive
+  if (order == "none") {
+    keys = propNumKeys(c)
+    return String(n) + (keys == 0 ? " OK" : " FAIL keys=" + String(keys))
+  }
   src = PropsSrcFrame(n, order)
   v = PropsVariant(src)
   size = PropsVariantSize(v)
@@ -81,7 +86,8 @@ function PropsCheckFrame(clip c, int n, string order)
     + " expected_len=" + String(size) + " fixed_ok=" + String(fixed_ok))
 }
 
-# reorders the pipeline output (order: "linear", "reverse", "shuffle") and writes one
+# reorders the pipeline output (order: "linear", "reverse", "shuffle"; "none": expect no
+# properties at all) and writes one
 # check line per frame into LOG_DIR + name + ".log"
 function PropsVerify(clip c, string name, string "order")
 {

@@ -32,7 +32,8 @@ $root = Resolve-Path (Join-Path $here "..\..")
 $frames = 800   # PROPS_FRAMES in props_common.avsi
 $failed = 0
 
-$scenarios = Get-ChildItem $here -Filter *.avs | Sort-Object Name | ForEach-Object { $_.BaseName }
+# Windows PowerShell's -Filter *.avs also matches *.avsi (8.3 name matching)
+$scenarios = Get-ChildItem $here -Filter *.avs | Where-Object { $_.Extension -eq ".avs" } | Sort-Object Name | ForEach-Object { $_.BaseName }
 if ($Tests.Count -gt 0) { $scenarios = $scenarios | Where-Object { $Tests -contains $_ } }
 
 # log files written by a scenario (multi_export writes two)
@@ -86,7 +87,7 @@ foreach ($platform in $Platforms) {
       Stop-Process $listener -ErrorAction SilentlyContinue
       Remove-Item env:MPP_TRACE_PROPS
     }
-    if (-not $finished) { Write-Host ("  {0,-16} FAIL (timeout)" -f $scenario); $failed++; continue }
+    if (-not $finished) { Write-Host ("  {0,-28} FAIL (timeout)" -f $scenario); $failed++; continue }
 
     $problems = @()
     # AVSMeter wraps long lines at console width: compare with line breaks removed
@@ -118,12 +119,13 @@ foreach ($platform in $Platforms) {
         @($events | Where-Object { $_ -eq "grow" }).Count, @($events | Where-Object { $_ -eq "shrink" }).Count, @($events | Where-Object { $_ -eq "release" }).Count
     }
     if ($problems.Count -eq 0) {
-      Write-Host ("  {0,-16} OK   ({1,5:N1} s){2}" -f $scenario, $sw.Elapsed.TotalSeconds, $traceInfo)
+      Write-Host ("  {0,-28} OK   ({1,5:N1} s){2}" -f $scenario, $sw.Elapsed.TotalSeconds, $traceInfo)
     } else {
       $failed++
-      Write-Host ("  {0,-16} FAIL" -f $scenario)
+      Write-Host ("  {0,-28} FAIL" -f $scenario)
       $problems | ForEach-Object { Write-Host "      $_" }
-      if ($scenario -notlike "error_*" -and $meterOut -match "Loading script\.\.\.\s*(.+?)(\(.*avs, line \d+\)|$)") {
+      # a missing log means the script did not load: show AVSMeter's error
+      if ($scenario -notlike "error_*" -and ($problems -match "missing$") -and $meterOut -match "Loading script\.\.\.\s*(.+?)(\(.*avs, line \d+\)|$)") {
         Write-Host "      AVSMeter: $($Matches[1].Trim())"
       }
     }

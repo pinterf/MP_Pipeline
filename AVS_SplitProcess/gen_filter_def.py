@@ -24,6 +24,7 @@ def generate_output():
         p("i", "cache_behind", optional=True, default_value=0),
         p("i", "fetcher_thread_lock_to_cpu", optional=True, default_value=-1),
         p("i", "server_thread_lock_to_cpu", optional=True, default_value=-1),
+        p("b", "props", optional=True, default_value="true"),
         avs_name="MPP_SharedMemoryServer",
     )
     write_definition("SharedMemoryClient", 

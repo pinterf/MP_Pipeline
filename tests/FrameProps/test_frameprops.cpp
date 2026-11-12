@@ -143,6 +143,26 @@ static int run() {
     deserialize_frame_props(env, none, dstn, buf.p(), wrote);
     CHECK(env->propNumKeys(env->getFramePropsRO(dstn)) == 0, "no-props deserialize");
 
+    // invalid hint in the stream (the core would store it unchecked): becomes unknown
+    {
+      PVideoFrame h = env->NewVideoFrame(vi);
+      env->propSetDataH(env->getFramePropsRW(h), "h", "x", 1, PROPDATATYPEHINT_UTF8, PROPAPPENDMODE_REPLACE);
+      AlignedBuf hb; hb.resize(serialize_frame_props(env, caps, h, nullptr, 0));
+      size_t hsize = serialize_frame_props(env, caps, h, hb.p(), 4096);
+      // header 24, entry head 8, key "h" padded to 8, data length 4, then the hint
+      const size_t hint_pos = 24 + 8 + 8 + 4;
+      int32_t hint; memcpy(&hint, hb.p() + hint_pos, 4);
+      CHECK(hint == PROPDATATYPEHINT_UTF8, "hint offset: found %d", hint);
+      for (int32_t bad : { 7, -2, 0x7FFFFFFF }) {
+        memcpy(hb.p() + hint_pos, &bad, 4);
+        PVideoFrame d = env->NewVideoFrame(vi);
+        deserialize_frame_props(env, caps, d, hb.p(), hsize);
+        int he = 0;
+        int got = env->propGetDataTypeHint(env->getFramePropsRO(d), "h", 0, &he);
+        CHECK(!he && got == PROPDATATYPEHINT_UNKNOWN, "invalid hint %d stored as %d", bad, got);
+      }
+    }
+
     PVideoFrame onlyclip = env->NewVideoFrame(vi);
     env->propSetClip(env->getFramePropsRW(onlyclip), "c", some_clip, PROPAPPENDMODE_REPLACE);
     CHECK(serialize_frame_props(env, caps, onlyclip, nullptr, 0) == 0, "clip-only map should give 0");

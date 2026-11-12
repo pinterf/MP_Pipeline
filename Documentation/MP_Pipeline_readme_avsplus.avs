@@ -147,6 +147,40 @@ Core selection is on a round-robin manner, with awareness of hyper-threading.
 
 Duplicate codes into downstream processes.
 
+#######################################################
+
+### frame props: <on|off>
+
+Default is on: frame properties of the clips leaving the process are passed downstream.
+With "off" the frames of this process arrive downstream without any frame property.
+Use it when the properties are not needed and passing them is costly (e.g. large
+string/data properties), or for comparison when something seems wrong.
+
+#######################################################
+
+Frame properties (AviSynth+)
+
+Frame properties travel with the frames between the processes, in both directions of
+bitness (win32 <-> win64), through branch, prefetch, export clip and pass clip.
+
+- Requires AviSynth+ with frame property support (interface version 8 or later) in both
+  processes. If either side has no frame properties (e.g. AviSynth 2.6), nothing is passed.
+- Passed: integer, float and string/data properties, including arrays.
+  The binary/UTF-8 type hint of data properties is kept when both cores support it
+  (interface version 11 or later).
+- Not passed: clip-typed and frame-typed properties. They cannot cross process boundaries
+  and are silently skipped.
+- Size: up to 4 KB of property data per frame travels together with the frame. Larger
+  property sets use an extra shared memory buffer, which grows on demand, shrinks and is
+  released again when the large properties are gone (checked every 64 frames of a buffer).
+  The limit is 256 MB of property data per frame.
+
+Diagnostics: with the environment variable MPP_TRACE_PROPS=1 set before the host starts,
+both sides report the creation, resizing and release of the extra buffers with
+OutputDebugString (visible e.g. in DebugView), lines start with "MPP_Props".
+
+See MP_Pipeline_frameprops_demo.avs for an example.
+
 """
 
 trim(0, 100)

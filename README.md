@@ -7,6 +7,18 @@ Copy files from x64 (or x64_xp) folder to the plugins directory for 64 bits plug
 
 MP_Pipeline 0.23
 
+Frame properties (AviSynth+)
+
+Frame properties are passed between the processes (also between win32 and win64), when
+both sides run AviSynth+ with frame property support (interface version 8 or later).
+Integer, float and string/data properties (also arrays) are passed; clip and frame
+typed properties are skipped. "### frame props: off" in a block switches it off for the
+frames leaving that block.
+See Documentation/MP_Pipeline_readme_avsplus.avs and MP_Pipeline_frameprops_demo.avs.
+
+Tests: tests/Pipeline/run_tests.ps1 (AVSMeter based pipeline tests) and
+tests/FrameProps (serializer unit test), see the comments in the files.
+
 #######################################################
 Change log:
 

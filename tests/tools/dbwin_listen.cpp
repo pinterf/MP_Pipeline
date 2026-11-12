@@ -3,7 +3,7 @@
 //
 // usage: dbwin_listen <seconds> [filter]
 //   prints "<pid> <message>" for each message containing 'filter' (all when omitted),
-//   exits after <seconds>. Only one DBWIN listener can run at a time (close DebugView).
+//   exits after <seconds>. Only one DBWIN listener should run at a time (close DebugView).
 // build: cl /nologo /O2 /EHsc dbwin_listen.cpp
 
 #define WIN32_LEAN_AND_MEAN
@@ -37,11 +37,8 @@ int main(int argc, char** argv)
         printf("unable to create DBWIN objects, code %lu\n", GetLastError());
         return 1;
     }
-    if (GetLastError() == ERROR_ALREADY_EXISTS)
-    {
-        printf("another debug output listener is running\n");
-        return 1;
-    }
+    // ERROR_ALREADY_EXISTS is normal: every process that called OutputDebugString keeps the
+    // buffer open. A second listener (e.g. DebugView) would steal messages, close it first.
     const DbWinBuffer* buffer = (const DbWinBuffer*)MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0);
     if (!buffer)
     {
