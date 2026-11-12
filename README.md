@@ -4,6 +4,7 @@ Plugin for Avisynth
 
 Copy files from x86 (or x86_xp) folder to the plugins directory for 32 bits plugins
 Copy files from x64 (or x64_xp) folder to the plugins directory for 64 bits plugins
+The _xp builds run on Windows XP as well (Visual C++ v141_xp toolset).
 
 MP_Pipeline 2.0
 
@@ -49,6 +50,9 @@ Change log:
   ("script block N exports X clips, max. 8 are allowed"), it is checked before any slave starts
 * More than one "### platform" statement in a block is an error (the first one was used silently)
 * AviSynth+ headers updated to interface V14
+* Build: Visual Studio 2026 (v143 toolset) for x86 / x64; the XP builds (ReleaseXP, v141_xp toolset) need
+  Visual Studio 2022, VS 2026 has no v141_xp toolset. Fix: building the solution in ReleaseXP
+  configuration built the Release (non-XP) projects.
 * Build: the filter definition generator runs with the Python launcher (py -3)
 * Documentation: frame properties, pixel formats, ### frame props statement;
   new demo script Documentation/MP_Pipeline_frameprops_demo.avs
