@@ -37,6 +37,7 @@ typedef struct _slave_create_params
 {
     const char* filter_name;
     char* script;
+    const wchar_t* script_name_vars; // SCRIPT_NAME_VARS_VAR_NAME_W content, NULL: none
     char slave_platform[MAX_PLATFORM_LENGTH + 1];
     HANDLE slave_job_object;
 } slave_create_params;

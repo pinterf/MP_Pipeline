@@ -6,6 +6,7 @@
 #include <Windows.h>
 #include <stdio.h>
 #include <string.h>
+#include <string>
 
 #include "slave_common.h"
 
@@ -78,6 +79,8 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
     __try
     {
         CHECKED(SetEnvironmentVariableA, SCRIPT_VAR_NAME_A, params->script);
+        // NULL value removes the variable (failure is fine when it did not exist)
+        SetEnvironmentVariableW(SCRIPT_NAME_VARS_VAR_NAME_W, params->script_name_vars);
         SECURITY_ATTRIBUTES pipe_attrs;
         memset(&pipe_attrs, 0, sizeof(pipe_attrs));
         pipe_attrs.nLength = sizeof(pipe_attrs);
@@ -232,6 +235,61 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
 #undef TRACE_ERROR
 #undef CHECKED
 
+static bool get_string_var(IScriptEnvironment* env, const std::string& name, const char** value)
+{
+    try
+    {
+        AVSValue v = env->GetVar(name.c_str());
+        if (v.IsString())
+        {
+            *value = v.AsString();
+            return true;
+        }
+    }
+    catch (IScriptEnvironment::NotFound) {}
+    return false;
+}
+
+// Collects the script name variables of the current script (the one that called MP_Pipeline),
+// see SCRIPT_NAME_VARS, as UTF-8 "Name=value\n" lines. Empty when none is set (e.g. no Import
+// in the master).
+static std::string collect_script_name_vars(IScriptEnvironment* env)
+{
+    std::string result;
+    for (const char* name : SCRIPT_NAME_VARS)
+    {
+        const char* value = NULL;
+        std::string value_utf8;
+        if (get_string_var(env, std::string("$") + name + "Utf8$", &value))
+        {
+            value_utf8 = value;
+        }
+        else if (get_string_var(env, std::string("$") + name + "$", &value))
+        {
+            // AviSynth 2.6 or older AviSynth+: ANSI only
+            value_utf8 = AnsiToUtf8(value);
+        }
+        if (!value_utf8.empty())
+        {
+            result += std::string(name) + "=" + value_utf8 + "\n";
+        }
+    }
+    return result;
+}
+
+// the environment variable content (UTF-16), new[] allocated, NULL when there is nothing to pass
+static wchar_t* script_name_vars_env_value(IScriptEnvironment* env)
+{
+    std::wstring wide = Utf8ToWideChar(collect_script_name_vars(env));
+    if (wide.empty())
+    {
+        return NULL;
+    }
+    wchar_t* copy = new wchar_t[wide.size() + 1];
+    memcpy(copy, wide.c_str(), (wide.size() + 1) * sizeof(wchar_t));
+    return copy;
+}
+
 void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new_slave_port, HANDLE* slave_stdin_handle)
 {
     *new_slave_port = 0;
@@ -239,6 +297,8 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
 
     size_t new_script_size = strlen(params->script) + 4096;
     char* new_script = new char[new_script_size];
+    // copied out of std::wstring: no C++ objects with destructors in a function with __try
+    wchar_t* script_name_vars = script_name_vars_env_value(env);
     __try
     {
         memset(new_script, 0, new_script_size);
@@ -266,6 +326,7 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
         slave_create_params new_params;
         memcpy(&new_params, params, sizeof(new_params));
         new_params.script = new_script;
+        new_params.script_name_vars = script_name_vars;
 
         TRACE("Creating slave, script: %hs", new_script);
 
@@ -281,5 +342,6 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
     __finally
     {
         delete[] new_script;
+        delete[] script_name_vars;
     }
 }

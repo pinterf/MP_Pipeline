@@ -147,6 +147,23 @@ Core selection is on a round-robin manner, with awareness of hyper-threading.
 
 Duplicate codes into downstream processes.
 
+The code is copied to every downstream process, whatever its platform. When the processes
+have different bitness (### platform), don't load plugins from a bitness specific folder here
+(LoadPlugin, AddAutoloadDir): 32 and 64 bit dlls cannot be mixed. Put such lines into the
+block with the matching ### platform statement instead.
+
+#######################################################
+
+Script name functions in the slave processes
+
+ScriptDir(), ScriptFile() and ScriptName() (and the Utf8 versions) return the same in every
+script block as in the main process: the values of the script calling MP_Pipeline (an imported
+file's values, when MP_Pipeline is called while that file is imported). So files next to the
+script can be found with ScriptDir() in any block. The "SCRIPTDIR" and "MAINSCRIPTDIR" prefixes
+of AddAutoloadDir work in the same way.
+The current directory of the slave processes is the one of the main process when the slave is
+started (usually the script's folder), so relative file names work as well.
+
 #######################################################
 
 ### frame props: <on|off>

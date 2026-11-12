@@ -6,6 +6,8 @@
 #include "avisynth.h"
 #include "splitprocess.h"
 #include <memory>
+#include <string>
+#include <vector>
 #include <assert.h>
 #include <io.h>
 #include <stdlib.h>
@@ -23,6 +25,54 @@ typedef int (__cdecl *_set_error_mode_t)(int _Mode);
 #define DLL_STATEMENT_PARAM "\\s*(.*?)\\s*$"
 
 #define DISABLE_EXIT_HACK_STATEMENT "^\\s*### disable exit hack"
+
+// Sets the master's script name variables (see SCRIPT_NAME_VARS), so ScriptDir(), ScriptName()
+// etc. return the same as in the master's script.
+static void set_script_name_vars(IScriptEnvironment* env)
+{
+    DWORD size = GetEnvironmentVariableW(SCRIPT_NAME_VARS_VAR_NAME_W, NULL, 0);
+    if (size == 0)
+    {
+        return;
+    }
+    std::vector<wchar_t> buffer(size + 1, L'\0');
+    if (GetEnvironmentVariableW(SCRIPT_NAME_VARS_VAR_NAME_W, buffer.data(), size) == 0)
+    {
+        return;
+    }
+    std::string all = WideCharToUtf8(buffer.data());
+    size_t pos = 0;
+    while (pos < all.size())
+    {
+        size_t end = all.find('\n', pos);
+        if (end == std::string::npos)
+        {
+            end = all.size();
+        }
+        std::string line = all.substr(pos, end - pos);
+        pos = end + 1;
+        size_t eq = line.find('=');
+        if (eq == std::string::npos)
+        {
+            continue;
+        }
+        std::string name = line.substr(0, eq);
+        std::string value = line.substr(eq + 1); // UTF-8
+        bool known = false;
+        for (const char* n : SCRIPT_NAME_VARS)
+        {
+            known = known || name == n;
+        }
+        if (!known || value.empty())
+        {
+            continue;
+        }
+        std::string ansi_name = "$" + name + "$";
+        std::string utf8_name = "$" + name + "Utf8$";
+        env->SetGlobalVar(env->SaveString(ansi_name.c_str()), env->SaveString(Utf8ToAnsi(value).c_str()));
+        env->SetGlobalVar(env->SaveString(utf8_name.c_str()), env->SaveString(value.c_str()));
+    }
+}
 
 LONG WINAPI exit_on_unhandled_exception(struct _EXCEPTION_POINTERS *ExceptionInfo) {
     ExitProcess(255);
@@ -152,6 +202,7 @@ int _tmain(int argc, _TCHAR* argv[])
         AVSValue script_value = script;
         try
         {
+          set_script_name_vars(env);
           v = env->Invoke("Eval", script_value);
         }
         catch (IScriptEnvironment::NotFound)
