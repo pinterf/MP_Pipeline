@@ -1,18 +1,25 @@
 #pragma once
 
+// The character type of the operating system's names (kernel objects, files, environment):
+// UTF-16 (wchar_t) on Windows, UTF-8 (char) elsewhere. Conversions: platform.h.
+
+#include <sstream>
 #include <string>
 
-// workaround for mixed char & wchar_t environment
-
-
-#ifdef UNICODE
-#define tstring wstring
-#define tostringstream wostringstream
+#ifdef _WIN32
+typedef wchar_t SYSCHAR;
+typedef std::wstring sys_string;
+typedef std::wostringstream sys_ostringstream;
+#define SYSTEXT(x) L##x
 #else
-#define tstring string
-#define tostringstream ostringstream
+typedef char SYSCHAR;
+typedef std::string sys_string;
+typedef std::ostringstream sys_ostringstream;
+#define SYSTEXT(x) x
 #endif
 
-typedef wchar_t SYSCHAR;
-#define sys_string std::wstring
-#define SYSTEXT(x) L##x
+// an ASCII text (names, numbers) as a sys_string
+inline sys_string ascii_to_sys(const std::string& s)
+{
+    return sys_string(s.begin(), s.end());
+}

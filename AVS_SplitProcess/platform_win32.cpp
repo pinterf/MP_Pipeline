@@ -74,6 +74,57 @@ void debug_output(const char* text)
     OutputDebugStringA(text);
 }
 
+// --- text --------------------------------------------------------------------------------------
+
+static UINT ansi_code_page()
+{
+    return AreFileApisANSI() ? CP_ACP : CP_OEMCP;
+}
+
+static std::wstring multibyte_to_wide(const std::string& s, UINT code_page)
+{
+    if (s.empty()) return std::wstring();
+    const int len = MultiByteToWideChar(code_page, 0, s.data(), (int)s.size(), NULL, 0);
+    std::wstring result(len, L'\0');
+    MultiByteToWideChar(code_page, 0, s.data(), (int)s.size(), &result[0], len);
+    return result;
+}
+
+static std::string wide_to_multibyte(const std::wstring& s, UINT code_page)
+{
+    if (s.empty()) return std::string();
+    const int len = WideCharToMultiByte(code_page, 0, s.data(), (int)s.size(), NULL, 0, NULL, NULL);
+    std::string result(len, '\0');
+    // characters the code page does not have become '?'
+    WideCharToMultiByte(code_page, 0, s.data(), (int)s.size(), &result[0], len, NULL, NULL);
+    return result;
+}
+
+std::string ansi_to_utf8(const std::string& s)
+{
+    return wide_to_multibyte(multibyte_to_wide(s, ansi_code_page()), CP_UTF8);
+}
+
+std::string utf8_to_ansi(const std::string& s)
+{
+    return wide_to_multibyte(multibyte_to_wide(s, CP_UTF8), ansi_code_page());
+}
+
+sys_string utf8_to_sys(const std::string& s)
+{
+    return multibyte_to_wide(s, CP_UTF8);
+}
+
+std::string sys_to_utf8(const sys_string& s)
+{
+    return wide_to_multibyte(s, CP_UTF8);
+}
+
+std::string sys_to_ansi(const sys_string& s)
+{
+    return wide_to_multibyte(s, ansi_code_page());
+}
+
 // --- files, modules, environment ---------------------------------------------------------------
 
 sys_string module_path()
@@ -108,6 +159,40 @@ sys_string module_path()
 bool file_exists(const sys_string& path)
 {
     return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+bool get_environment_variable(const char* name, std::string& value)
+{
+    const DWORD size = GetEnvironmentVariableA(name, NULL, 0);
+    if (size == 0)
+    {
+        return false;
+    }
+    std::vector<char> buffer(size + 1, 0);
+    const DWORD len = GetEnvironmentVariableA(name, &buffer[0], size);
+    if (len == 0 || len >= size + 1)
+    {
+        return false;
+    }
+    value.assign(&buffer[0], len);
+    return true;
+}
+
+bool get_environment_variable(const SYSCHAR* name, sys_string& value)
+{
+    const DWORD size = GetEnvironmentVariableW(name, NULL, 0);
+    if (size == 0)
+    {
+        return false;
+    }
+    std::vector<wchar_t> buffer(size + 1, 0);
+    const DWORD len = GetEnvironmentVariableW(name, &buffer[0], size);
+    if (len == 0 || len >= size + 1)
+    {
+        return false;
+    }
+    value.assign(&buffer[0], len);
+    return true;
 }
 
 bool set_environment_variable(const char* name, const char* value)

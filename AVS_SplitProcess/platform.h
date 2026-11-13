@@ -40,12 +40,29 @@ std::string new_unique_id();
 // a line for the debugger / DebugView (OutputDebugString on Windows)
 void debug_output(const char* text);
 
+// --- text --------------------------------------------------------------------------------------
+
+// "ANSI" is the code page AviSynth uses for script text and file names on Windows
+// (AreFileApisANSI() ? CP_ACP : CP_OEMCP); characters it does not have become '?'.
+// Elsewhere everything is UTF-8 and the ANSI conversions return their input.
+// sys_string (SystemChar.h) is UTF-16 on Windows and UTF-8 elsewhere.
+std::string ansi_to_utf8(const std::string& s);
+std::string utf8_to_ansi(const std::string& s);
+sys_string utf8_to_sys(const std::string& s);
+std::string sys_to_utf8(const sys_string& s);
+std::string sys_to_ansi(const sys_string& s);
+
 // --- files, modules, environment ---------------------------------------------------------------
 
 // full path of the module (the plugin DLL or the executable) containing this code; empty on failure
 sys_string module_path();
 
 bool file_exists(const sys_string& path);
+
+// Reads a variable of this process' environment; false when it is not set. The narrow version
+// uses the process' ANSI code page (Windows), the wide one is exact.
+bool get_environment_variable(const char* name, std::string& value);
+bool get_environment_variable(const SYSCHAR* name, sys_string& value);
 
 // Sets a variable in the environment of this process (value NULL: removes it); the child
 // processes started afterwards inherit it. The narrow version uses the process' ANSI code page

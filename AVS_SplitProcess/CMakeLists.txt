@@ -30,7 +30,7 @@ target_link_libraries(${PluginName} PRIVATE rpcrt4)
 # --- the slave process --------------------------------------------------------------------------
 add_executable(${SlaveName} ${MP_Pipeline_Slave_Sources})
 set_target_properties(${SlaveName} PROPERTIES "OUTPUT_NAME" "${PluginName}.dll.slave")
-target_link_libraries(${SlaveName} PRIVATE psapi)
+target_link_libraries(${SlaveName} PRIVATE psapi rpcrt4)
 
 # version resources
 enable_language(RC)

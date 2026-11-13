@@ -4,7 +4,7 @@
 #include "SharedMemoryServer.h"
 
 // #define ENABLE_TRACING
-#define TRACE_PREFIX L"SharedMemoryServer"
+#define TRACE_PREFIX "SharedMemoryServer"
 #include "trace.h"
 #include "utils.h"
 #include "slave_common.h"
@@ -67,7 +67,7 @@ bool SharedMemoryServer::is_shutting_down() const
 
 void trace_avs_error(AvisynthError& e)
 {
-    TRACE("AvisynthError: %hs", e.msg);
+    TRACE("AvisynthError: %s", e.msg);
 }
 
 void SharedMemoryServer::process_get_parity(const shared_memory_source_request_t& request)
@@ -356,7 +356,7 @@ unsigned SharedMemoryServer::thread_proc()
             trace_avs_error(e);
         } catch (runtime_error& e) {
             strncpy(_manager.header->error_msg, e.what(), ARRAYSIZE(_manager.header->error_msg));
-            TRACE("Runtime error while handling request: %hs", e.what());
+            TRACE("Runtime error while handling request: %s", e.what());
         } catch (...) {
             strncpy(_manager.header->error_msg, "Unknown error.", ARRAYSIZE(_manager.header->error_msg));
             TRACE("Unknown error occurred while handling request.");

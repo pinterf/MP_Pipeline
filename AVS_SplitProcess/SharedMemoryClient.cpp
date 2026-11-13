@@ -6,7 +6,7 @@
 #include "utils.h"
 
 // #define ENABLE_TRACING
-#define TRACE_PREFIX L"SharedMemoryClient"
+#define TRACE_PREFIX "SharedMemoryClient"
 #include "trace.h"
 #include <assert.h>
 #include <stdexcept>

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <ctype.h>
 #include <memory>
 #include <string>
 #include <string.h>
@@ -41,19 +40,9 @@ static const int MAX_EXPORTED_CLIPS = 8;
 // bitness (MP_Pipeline.dll.win32, MP_Pipeline.dll.win32.slave.exe), empty for the current platform.
 inline std::string platform_file_suffix(const char* platform)
 {
-    if (!platform || !platform[0])
+    if (!platform || !platform[0] || streqi(platform, CURRENT_PLATFORM))
     {
         return std::string();
-    }
-    const char* current = CURRENT_PLATFORM;
-    size_t i = 0;
-    while (platform[i] && current[i] && tolower((unsigned char)platform[i]) == tolower((unsigned char)current[i]))
-    {
-        i++;
-    }
-    if (!platform[i] && !current[i])
-    {
-        return std::string(); // the current platform (case-insensitive)
     }
     return std::string(".") + platform;
 }
@@ -62,7 +51,7 @@ typedef struct _slave_create_params
 {
     const char* filter_name;
     char* script;
-    const wchar_t* script_name_vars; // SCRIPT_NAME_VARS_VAR_NAME_W content, NULL: none
+    const SYSCHAR* script_name_vars; // SCRIPT_NAME_VARS_VAR_NAME content, NULL: none
     char slave_platform[MAX_PLATFORM_LENGTH + 1];
     platform::ChildProcessGroup* slave_group;
 } slave_create_params;

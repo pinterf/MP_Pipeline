@@ -9,6 +9,23 @@ int sprintf_append(char* buffer, const char* format, ...);
 // microseconds of a monotonic clock, for measuring durations
 int64_t us_time();
 
+// Case-insensitive equality for ASCII names and keywords (statement values, platform names), like
+// streqi of AviSynth+: no locale dependency, other bytes (e.g. UTF-8) must match exactly.
+inline bool streqi(const char* s1, const char* s2)
+{
+    auto to_lower = [](char c) { return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c; };
+    while (*s1 || *s2)
+    {
+        if (to_lower(*s1) != to_lower(*s2))
+        {
+            return false;
+        }
+        ++s1;
+        ++s2;
+    }
+    return true;
+}
+
 
 #ifdef _M_X64
 typedef __int64 NATIVE_INT;

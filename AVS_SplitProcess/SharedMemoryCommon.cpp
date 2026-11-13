@@ -1,6 +1,3 @@
-#define UNICODE
-#define _UNICODE
-
 #include "common.h"
 #include "SharedMemoryCommon.h"
 
@@ -61,7 +58,7 @@ ClipSyncGroup::ClipSyncGroup(const sys_string& name, int clip_index, shared_memo
 {
     for (int i = 0; i < 2; i++)
     {
-        tostringstream ss;
+        sys_ostringstream ss;
         ss << name << SYSTEXT("_") << clip_index << SYSTEXT("_Response") << i;
         response_conds.push_back(unique_ptr<CondVar>(new CondVar(&clip_info.frame_response[i].lock, ss.str(), is_server, activity)));
     }
@@ -73,10 +70,7 @@ sys_string get_shared_memory_key(const char* key1, int key2)
     {
         throw invalid_argument("key1 is too long.");
     }
-    SYSCHAR buffer[1024];
-    memset(buffer, 0, sizeof(buffer));
-    _sntprintf(buffer, ARRAYSIZE(buffer) - 1, L"SharedMemorySource_%hs_%d", key1, key2);
-    return sys_string(buffer);
+    return ascii_to_sys(std::string("SharedMemorySource_") + key1 + "_" + std::to_string(key2));
 }
 
 int get_response_index(int frame_number)
@@ -286,7 +280,7 @@ void SharedMemorySourceManager::init_sync_objects(const sys_string& key, int cli
 {
     activity = unique_ptr<ActivitySignal>(new ActivitySignal(key + SYSTEXT("_Activity"), header->activity, _is_server));
 
-    tstring cond_event_name(key);
+    sys_string cond_event_name(key);
     cond_event_name.append(SYSTEXT("_CondEvent"));
     request_cond = unique_ptr<CondVar>(new CondVar(&header->request_lock, cond_event_name, _is_server, activity.get()));
 

@@ -1,6 +1,3 @@
-#define UNICODE
-#define _UNICODE
-
 #include "common.h"
 
 #include <stdio.h>
@@ -14,7 +11,7 @@
 
 #include "splitprocess.h"
 
-#define TRACE_COMPONENT L"slave_common"
+#define TRACE_COMPONENT "slave_common"
 #include "trace.h"
 
 // one slave start at a time in the process: the environment variables passed to the slave
@@ -34,7 +31,7 @@ static std::unique_ptr<platform::ChildInput> create_slave_process(slave_create_p
 {
     memset(error_msg, 0, error_msg_len);
     auto fail = [&](const char* message) {
-        TRACE("%hs", message);
+        TRACE("%s", message);
         snprintf(error_msg, error_msg_len, "%s", message);
         return std::unique_ptr<platform::ChildInput>();
     };
@@ -58,7 +55,7 @@ static std::unique_ptr<platform::ChildInput> create_slave_process(slave_create_p
         return fail("Unable to pass the script to the slave process (environment).");
     }
     // NULL value removes the variable (failure is fine when it did not exist)
-    platform::set_environment_variable(SCRIPT_NAME_VARS_VAR_NAME_W, params->script_name_vars);
+    platform::set_environment_variable(SCRIPT_NAME_VARS_VAR_NAME, params->script_name_vars);
 
     // closes our handles of the process and its output when leaving; the stdin is handed over
     // only on success, otherwise it is closed too and the slave sees the end of its input
@@ -166,7 +163,7 @@ static std::string collect_script_name_vars(IScriptEnvironment* env)
         else if (get_string_var(env, std::string("$") + name + "$", &value))
         {
             // AviSynth 2.6 or older AviSynth+: ANSI only
-            value_utf8 = AnsiToUtf8(value);
+            value_utf8 = platform::ansi_to_utf8(value);
         }
         if (!value_utf8.empty())
         {
@@ -184,8 +181,8 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
     size_t new_script_size = strlen(params->script) + 4096;
     char* new_script = new char[new_script_size];
     auto cleanup = make_scope_exit([&] { delete[] new_script; });
-    // the environment variable content (UTF-16), empty when there is nothing to pass
-    const std::wstring script_name_vars = Utf8ToWideChar(collect_script_name_vars(env));
+    // the environment variable content, empty when there is nothing to pass
+    const sys_string script_name_vars = platform::utf8_to_sys(collect_script_name_vars(env));
     {
         memset(new_script, 0, new_script_size);
 
@@ -206,7 +203,7 @@ void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new
         new_params.script = new_script;
         new_params.script_name_vars = script_name_vars.empty() ? NULL : script_name_vars.c_str();
 
-        TRACE("Creating slave, script: %hs", new_script);
+        TRACE("Creating slave, script: %s", new_script);
 
         slave_input = create_slave_process(&new_params, error_msg, sizeof(error_msg));
         if (!slave_input)

@@ -5,6 +5,7 @@
 #include <string.h>
 #include "avisynth.h"
 #include "splitprocess.h"
+#include "platform.h"
 #include <chrono>
 #include <memory>
 #include <string>
@@ -32,17 +33,12 @@ typedef int (__cdecl *_set_error_mode_t)(int _Mode);
 // etc. return the same as in the master's script.
 static void set_script_name_vars(IScriptEnvironment* env)
 {
-    DWORD size = GetEnvironmentVariableW(SCRIPT_NAME_VARS_VAR_NAME_W, NULL, 0);
-    if (size == 0)
+    sys_string all_sys;
+    if (!platform::get_environment_variable(SCRIPT_NAME_VARS_VAR_NAME, all_sys))
     {
         return;
     }
-    std::vector<wchar_t> buffer(size + 1, L'\0');
-    if (GetEnvironmentVariableW(SCRIPT_NAME_VARS_VAR_NAME_W, buffer.data(), size) == 0)
-    {
-        return;
-    }
-    std::string all = WideCharToUtf8(buffer.data());
+    const std::string all = platform::sys_to_utf8(all_sys);
     size_t pos = 0;
     while (pos < all.size())
     {
@@ -71,7 +67,7 @@ static void set_script_name_vars(IScriptEnvironment* env)
         }
         std::string ansi_name = "$" + name + "$";
         std::string utf8_name = "$" + name + "Utf8$";
-        env->SetGlobalVar(env->SaveString(ansi_name.c_str()), env->SaveString(Utf8ToAnsi(value).c_str()));
+        env->SetGlobalVar(env->SaveString(ansi_name.c_str()), env->SaveString(platform::utf8_to_ansi(value).c_str()));
         env->SetGlobalVar(env->SaveString(utf8_name.c_str()), env->SaveString(value.c_str()));
     }
 }
@@ -144,7 +140,7 @@ int silent_error_messages() {
     return 0;
 }
 
-int _tmain(int argc, _TCHAR* argv[])
+int main()
 {
     HANDLE stdout_handle_original = GetStdHandle(STD_OUTPUT_HANDLE);
     assert(stdout_handle_original != INVALID_HANDLE_VALUE);
@@ -154,14 +150,13 @@ int _tmain(int argc, _TCHAR* argv[])
     SetStdHandle(STD_OUTPUT_HANDLE, GetStdHandle(STD_ERROR_HANDLE));
 
     auto stdout_file = _fdopen(_open_osfhandle((intptr_t)stdout_handle, _O_TEXT), "w");
-    TCHAR script[32768];
-
-    memset(script, 0, sizeof(script));
-    if (!GetEnvironmentVariable(SCRIPT_VAR_NAME, script, ARRAYSIZE(script) - 1))
+    std::string script_text;
+    if (!platform::get_environment_variable(SCRIPT_VAR_NAME_A, script_text))
     {
-      fprintf(stdout_file, "GetEnvironmentVariable failed, code = %lu.\n", GetLastError());
+      fprintf(stdout_file, "Unable to read the script from the environment (%s).\n", SCRIPT_VAR_NAME_A);
         return 1;
     }
+    const char* script = script_text.c_str();
     if (strlen(script) == 0)
     {
       fprintf(stdout_file, "Script is empty.\n");
@@ -176,13 +171,13 @@ int _tmain(int argc, _TCHAR* argv[])
       fprintf(stdout_file, "GetStdHandle failed, code = %lu.\n", GetLastError());
         return 6;
     }
-    const TCHAR* avisynth_module_name = TEXT("avisynth.dll"); // Default
+    const char* avisynth_module_name = "avisynth.dll"; // Default
     scan_statement(script, DLL_STATEMENT_START DLL_STATEMENT_PARAM, NULL,
         NULL, &avisynth_module_name,
         NULL, NULL
     );
 
-    HMODULE avisynth_module = LoadLibrary(avisynth_module_name);
+    HMODULE avisynth_module = LoadLibraryA(avisynth_module_name);
     if (!avisynth_module)
     {
         fprintf(stdout_file, "Unable to load %s, code = %lu\n", avisynth_module_name, GetLastError());

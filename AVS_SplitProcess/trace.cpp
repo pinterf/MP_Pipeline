@@ -1,30 +1,18 @@
-#define UNICODE
-#define _UNICODE
-
 #include "common.h"
 #include "trace.h"
+#include "platform.h"
 
-void _trace(const TCHAR *format, ...)
+#include <stdarg.h>
+#include <stdio.h>
+
+void _trace(const char* format, ...)
 {
-   TCHAR buffer[ 4096 ];
+    char buffer[4096];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
 
-   buffer[ sizeof(buffer) / sizeof(TCHAR) - 1 ] = 0;
-
-   va_list argptr;
-   va_start( argptr, format );
-   _vsntprintf_s( buffer, sizeof(buffer) / sizeof(TCHAR) - 1, format, argptr );
-   va_end( argptr );
-
-   OutputDebugString( buffer );
-   _tprintf( TEXT("%s\n"), buffer );
-}
-
-void _trace_hr( const TCHAR* strFile, DWORD dwLine, const TCHAR* strFunction, HRESULT hr, const TCHAR* strMsg )
-{
-    TRACE( "Trace HR: Code=0x%08x, File=%s, Line=%d, Function=%s, Msg=%s", hr, strFile, dwLine, strFunction, strMsg );
-}
-
-void _trace_hr( const TCHAR* strFile, DWORD dwLine, const TCHAR* strFunction, HRESULT hr, const TCHAR* strMsg, const TCHAR* strMsg2 )
-{
-    TRACE( "Trace HR: Code=0x%08x, File=%s, Line=%d, Function=%s, Msg=%s, Msg2=%s", hr, strFile, dwLine, strFunction, strMsg, strMsg2 );
+    platform::debug_output(buffer);
+    printf("%s\n", buffer);
 }

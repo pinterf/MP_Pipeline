@@ -43,8 +43,8 @@ void props_log(const char* format, ...)
 
 sys_string overflow_mapping_name(const sys_string& key, int clip_index, int slot, uint32_t gen)
 {
-    std::wostringstream ss;
-    ss << key << L"_Props_" << clip_index << L"_" << slot << L"_" << gen;
+    sys_ostringstream ss;
+    ss << key << SYSTEXT("_Props_") << clip_index << SYSTEXT("_") << slot << SYSTEXT("_") << gen;
     return ss.str();
 }
 

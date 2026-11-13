@@ -15,7 +15,6 @@
 #include <algorithm>
 
 #include "platform.h"
-#include "splitprocess.h"
 
 #define BRANCH_STATEMENT_START "^\\s*### branch:"
 #define BRANCH_STATEMENT_PARAM "\\s*(\\d+)(?:\\s*,\\s*(\\d{1,7}))?\\s*$"
@@ -99,7 +98,7 @@ void add_load_plugin_function(char* script, const char* platform, IScriptEnviron
     {
         env->ThrowError("MP_Pipeline: Unable to get the path of the plugin.");
     }
-    const std::string self_path = WideToMultiByte(module_path, ansi_code_page()) + platform_file_suffix(platform);
+    const std::string self_path = platform::sys_to_ansi(module_path) + platform_file_suffix(platform);
     sprintf_append(script, "function %s() {\n LoadPlugin(\"%s\")\n }\n", LOAD_PLUGIN_FUNCTION_NAME, self_path.c_str());
 }
 
@@ -184,7 +183,7 @@ void append_clip_check(char* script, const char* value, const char* message)
 void append_prepare_last(char* script, int block_number)
 {
     char message[128];
-    _snprintf_s(message, _TRUNCATE, "MP_Pipeline: script block %d must end with a clip", block_number);
+    snprintf(message, sizeof(message), "MP_Pipeline: script block %d must end with a clip", block_number);
     append_clip_check(script, "last", message);
     sprintf_append(script, "MPP_Checked.%s()\n", PREPARE_DOWNSTREAM_CLIP_FUNCTION_NAME);
 }
@@ -195,7 +194,7 @@ void prepare_export_clip(char* script, char* next_script, int process_id, int bl
     bool result = process_export_clip_statement(script, [=, &i] (const char* clip_var_name) {
         i++;
         char message[256];
-        _snprintf_s(message, _TRUNCATE, "MP_Pipeline: script block %d: exported variable '%s' is not a clip", block_number, clip_var_name);
+        snprintf(message, sizeof(message), "MP_Pipeline: script block %d: exported variable '%s' is not a clip", block_number, clip_var_name);
         append_clip_check(script, clip_var_name, message);
         sprintf_append(script, "%s = MPP_Checked.%s()\n", clip_var_name, PREPARE_DOWNSTREAM_CLIP_FUNCTION_NAME);
         sprintf_append(next_script, "%s = %s_%d(%d) ", clip_var_name, GET_UPSTREAM_CLIP_FUNCTION_NAME, process_id, i);
@@ -257,11 +256,11 @@ void MP_Pipeline::prepare_slave(slave_create_params* params, IScriptEnvironment*
         if (!scan_statement(params->script, FRAME_PROPS_STATEMENT_START FRAME_PROPS_STATEMENT_PARAM, NULL,
             "%7s", value,
             NULL, NULL) ||
-            (_stricmp(value, "on") != 0 && _stricmp(value, "off") != 0))
+            (!streqi(value, "on") && !streqi(value, "off")))
         {
             env->ThrowError("MP_Pipeline: Invalid frame props statement, use \"### frame props: on\" or \"### frame props: off\".");
         }
-        if (_stricmp(value, "off") == 0)
+        if (streqi(value, "off"))
         {
             strcat(params->script, ", props=false");
         }
@@ -388,7 +387,7 @@ void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_coun
         memset(buffer, 0, buffer_size);
 
         const char* GET_BRANCH_ID = "MPP_GetBranchID";
-        _snprintf(buffer, buffer_size, "global MP_PIPELINE_BRANCH_ID = %s()\n%s\n", GET_BRANCH_ID, script);
+        snprintf(buffer, buffer_size, "global MP_PIPELINE_BRANCH_ID = %s()\n%s\n", GET_BRANCH_ID, script);
         append_prepare_last(buffer, block_number);
         prepare_export_clip(buffer, next_script, process_id, block_number, env);
         sprintf_append(buffer, "%s\n", branch_line_ptr + 1);
@@ -453,7 +452,9 @@ void MP_Pipeline::create_pipeline_finish(char* script, IScriptEnvironment* env)
 
 void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
 {
-    char* script_dup = _strdup(_script);
+    // a copy of the script, split into its blocks in place
+    std::vector<char> script_copy(_script, _script + strlen(_script) + 1);
+    char* script_dup = script_copy.data();
     char* buffer_store = NULL;
     char* current_script_part = NULL;
     char* next_script_part = NULL;
@@ -470,7 +471,6 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
             _slave_inputs.clear();
         }
         free(buffer_store);
-        free(script_dup);
     });
     {
         size_t buffer_size = strlen(_script) + 256000;

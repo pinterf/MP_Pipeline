@@ -2,7 +2,7 @@
 #include "FrameFetcher.h"
 
 // #define ENABLE_TRACING
-#define TRACE_PREFIX __TRACE_TEXT("FrameFetcher")
+#define TRACE_PREFIX "FrameFetcher"
 #include "trace.h"
 #include "utils.h"
 
@@ -165,11 +165,11 @@ void FrameFetcher::fetch_frame(ClipInfo& clip, int n)
             return;
         }
 #ifdef _DEBUG
-        TRACE("Time elapsed while fetching frame %d: %lld us", n, us_time() - start_time);
+        TRACE("Time elapsed while fetching frame %d: %lld us", n, (long long)(us_time() - start_time));
 #endif
         { // lock start
             std::lock_guard<std::mutex> lock(_lock);
-            TRACE("Adding frame %d to cache", clip.cache_frame_start + clip.frame_cache.size());
+            TRACE("Adding frame %d to cache", clip.cache_frame_start + (int)clip.frame_cache.size());
             clip.frame_cache.push_back(frame);
             // under the lock: after set_new_frame_callback(nullptr) it is not called any more
             if (_new_frame_callback)

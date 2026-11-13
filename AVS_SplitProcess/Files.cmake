@@ -8,6 +8,7 @@ file(GLOB MP_Pipeline_Sources RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
 # the slave process: its main and the sources it shares with the plugin
 set(MP_Pipeline_Slave_Sources
   "slave_main.cpp"
+  "platform_win32.cpp"
   "statement.cpp"
   "trace.cpp"
 )

@@ -1,33 +1,25 @@
 #pragma once
 
+// Debug tracing, in Debug builds (DISABLE_TRACING switches it off in a file): to the debugger /
+// DebugView (platform::debug_output) and stdout. printf format, narrow strings.
+
 #if defined(_DEBUG) && !defined(DISABLE_TRACING)
 #define ENABLE_TRACING
 #endif
 
 #if defined(ENABLE_TRACING)
 
-#define __TRACE_TEXT(x) L##x
-
-#define _TRACE_TEXT(x) __TRACE_TEXT(x)
-
 #ifndef TRACE_PREFIX
-#define TRACE_PREFIX _TRACE_TEXT("AVS_SplitProcess ")
+#define TRACE_PREFIX "AVS_SplitProcess "
 #endif
 
 #ifndef TRACE_COMPONENT
-#define TRACE_COMPONENT _TRACE_TEXT("")
+#define TRACE_COMPONENT ""
 #endif
 
+void _trace(const char* format, ...);
 
-void _trace(const wchar_t *format, ...);
-void _trace_hr( const wchar_t* strFile, DWORD dwLine, const wchar_t* strFunction, HRESULT hr, const wchar_t* strMsg );
-void _trace_hr( const wchar_t* strFile, DWORD dwLine, const wchar_t* strFunction, HRESULT hr, const wchar_t* strMsg, const wchar_t* strMsg2 );
-
-#define TRACE(format, ...) _trace(TRACE_PREFIX TRACE_COMPONENT _TRACE_TEXT(":") _TRACE_TEXT(format), ##__VA_ARGS__)
-#define TRACE_HR(hr, msg) _trace_hr( _TRACE_TEXT(__FILE__), (DWORD)__LINE__, _TRACE_TEXT(__FUNCTION__), hr, msg )
-#define TRACE_HR2(hr, msg, msg2) _trace_hr( _TRACE_TEXT(__FILE__), (DWORD)__LINE__, _TRACE_TEXT(__FUNCTION__), hr, msg, msg2 )
+#define TRACE(format, ...) _trace(TRACE_PREFIX TRACE_COMPONENT ":" format, ##__VA_ARGS__)
 #else
-#define TRACE(...) 
-#define TRACE_HR(...) 
-#define TRACE_HR2(...) 
+#define TRACE(...)
 #endif

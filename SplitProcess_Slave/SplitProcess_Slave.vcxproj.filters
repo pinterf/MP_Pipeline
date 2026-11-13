@@ -15,6 +15,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\AVS_SplitProcess\platform_win32.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\AVS_SplitProcess\trace.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

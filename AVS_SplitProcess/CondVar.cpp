@@ -1,6 +1,3 @@
-#define UNICODE
-#define _UNICODE
-
 #include "common.h"
 #include "CondVar.h"
 #include "utils.h"
