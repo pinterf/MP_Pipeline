@@ -9,7 +9,8 @@
 #include "utils.h"
 #include "slave_common.h"
 #include <assert.h>
-#include <process.h>
+#include <chrono>
+#include <system_error>
 #include <exception>
 #include <memory>
 #include <sstream>
@@ -62,10 +63,6 @@ bool SharedMemoryServer::is_shutting_down() const
     return _shutdown || load_object_state(_manager.header).shutdown;
 }
 
-unsigned __stdcall SharedMemoryServer::thread_stub(void* self)
-{
-    return ((SharedMemoryServer*)self)->thread_proc();
-}
 
 void trace_avs_error(AvisynthError& e)
 {
@@ -80,7 +77,7 @@ void SharedMemoryServer::process_get_parity(const shared_memory_source_request_t
     std::atomic<int64_t>& result_reference = _manager.header->clips[request.clip_index].parity_response[response_index];
     parity_response_t result;
 
-    char parity = 0;
+    uint8_t parity = 0;
 
     while (true)
     {
@@ -410,10 +407,10 @@ void SharedMemoryServer::wait_for_activity()
 SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, const VideoInfo vi_array[], const SharedMemoryServer_parameter_storage_t& o, IScriptEnvironment* env):
     SharedMemoryServer_parameter_storage_t(o),
     GenericVideoFilter(clips[0]),
-    _thread_handle(NULL),
     _env(env),
     _shutdown(false),
-    _fetcher(clips, _max_cache_frames, _cache_behind, env),
+    _thread_exited(false),
+    _fetcher(clips, _max_cache_frames, _cache_behind, env, _fetcher_thread_lock_to_cpu),
     _manager(get_shared_memory_key(_instance_key, _port), clip_count, vi_array),
     _props_caps(detect_frame_props_caps(env))
 {
@@ -439,35 +436,31 @@ SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, cons
         _activity_wait_handles.push_back(_manager.sync_groups[i]->response_conds[1]->signal.get_event_this_side());
     }
 
-    _thread_handle.replace((HANDLE)_beginthreadex(NULL, 0, thread_stub, this, 0, 0));
-    if (!_thread_handle.is_valid())
+    try
     {
+        _thread = std::thread([this] {
+            // a failed affinity is ignored: the server works without it
+            lock_current_thread_to_cpu(_server_thread_lock_to_cpu);
+            thread_proc();
+            _thread_exited = true;
+        });
+    } catch (const std::system_error&) {
         env->ThrowError("SharedMemoryServer: Unable to create thread.");
-    }
-    if (_fetcher_thread_lock_to_cpu >= 0)
-    {
-        if (!_fetcher.set_worker_thread_affinity( ((DWORD_PTR)1) << _fetcher_thread_lock_to_cpu ))
-        {
-            // Don't crash if affinity is not met
-            // env->ThrowError("SharedMemoryServer: Unable to set affinity of fetcher thread, code = %d", GetLastError());
-        }
-    }
-    if (_server_thread_lock_to_cpu >= 0)
-    {
-        if (!SetThreadAffinityMask(_thread_handle.get(), ((DWORD_PTR)1) << _server_thread_lock_to_cpu ))
-        {
-            // Don't crash if affinity is not met
-            // env->ThrowError("SharedMemoryServer: Unable to set affinity of server thread, code = %d", GetLastError());
-        }
     }
 }
 
 SharedMemoryServer::~SharedMemoryServer()
 {
     initiate_shutdown();
-    while (_thread_handle.wait(10) == WAIT_TIMEOUT)
+    // repeat the shutdown signal until the thread has seen it (it may be waiting for activity)
+    while (_thread.joinable() && !_thread_exited)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
         initiate_shutdown();
+    }
+    if (_thread.joinable())
+    {
+        _thread.join();
     }
 }
 

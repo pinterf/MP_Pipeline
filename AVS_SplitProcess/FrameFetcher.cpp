@@ -6,7 +6,7 @@
 #include "trace.h"
 #include "utils.h"
 
-#include <process.h>
+#include <system_error>
 #include <assert.h>
 
 
@@ -18,13 +18,11 @@ void wait_and_reset_event(OwnedEventHandle& event)
     event.reset();
 }
 
-unsigned __stdcall FrameFetcher::thread_stub(void* fetcher)
-{
-    return ((FrameFetcher*)fetcher)->thread_proc();
-}
 
 unsigned FrameFetcher::thread_proc()
 {
+    // a failure is ignored, as before: the fetcher works without the affinity
+    lock_current_thread_to_cpu(_worker_cpu);
     try
     {
         while (!_shutdown)
@@ -346,21 +344,15 @@ PVideoFrame FrameFetcher::GetFrame(int clip_index, int n, IScriptEnvironment* en
     }
 }
 
-bool FrameFetcher::set_worker_thread_affinity(DWORD_PTR affinity_mask)
-{
-    assert(!_shutdown);
-    assert(_worker_thread.is_valid());
-    return !!SetThreadAffinityMask(_worker_thread.get(), affinity_mask);
-}
 
-FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_behind, IScriptEnvironment* env)
+FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_behind, IScriptEnvironment* env, int worker_cpu)
     : _max_cache_frames(max_cache_frames <= cache_behind ? cache_behind + 1 : max_cache_frames),  
       _cache_behind(cache_behind),
       _env(env),
       _clips(),
       _lock(),
       _worker_callback(),
-      _worker_thread(NULL),
+      _worker_cpu(worker_cpu),
       _worker_workitem_completed_event(CreateEvent(NULL, TRUE, FALSE, NULL)), // needs to be manual reset, since we want all threads waiting on this event to be released when it is signaled
       _worker_waiting_for_work_event(CreateEvent(NULL, FALSE, FALSE, NULL)),
       new_frame_in_cache_event(CreateEvent(NULL, TRUE, FALSE, NULL)),
@@ -393,9 +385,10 @@ FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_
     {
         env->ThrowError("FrameFetcher: Unexpected exception: No input clip.");
     }
-    _worker_thread.replace((HANDLE)_beginthreadex(NULL, 0, FrameFetcher::thread_stub, this, 0, NULL));
-    if (!_worker_thread.is_valid())
+    try
     {
+        _worker_thread = std::thread(&FrameFetcher::thread_proc, this);
+    } catch (const std::system_error&) {
         env->ThrowError("FrameFetcher: Can't start worker thread.");
     }
 }
@@ -410,6 +403,9 @@ void FrameFetcher::signal_shutdown()
 FrameFetcher::~FrameFetcher()
 {
     signal_shutdown();
-    _worker_thread.wait();
+    if (_worker_thread.joinable())
+    {
+        _worker_thread.join();
+    }
     _env = NULL;
 }

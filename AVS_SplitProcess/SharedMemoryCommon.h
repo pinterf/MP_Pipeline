@@ -52,10 +52,10 @@ typedef struct _shared_memory_source_request_t
 // took its request), so every field is atomic.
 typedef struct _shared_request_slot_t
 {
-    std::atomic<int> request_type; // request_type_t
-    std::atomic<int> clip_index;
-    std::atomic<int> frame_number;
-    std::atomic<int> sequence_number;
+    std::atomic<int32_t> request_type; // request_type_t
+    std::atomic<int32_t> clip_index;
+    std::atomic<int32_t> frame_number;
+    std::atomic<int32_t> sequence_number;
 } shared_request_slot_t;
 
 // a parity response, local copy, packed into the 64 bit value of the shared slot
@@ -63,10 +63,10 @@ typedef union _parity_response_t
 {
     struct
     {
-        int frame_number;
-        short sequence_number;
-        signed char requested_client_count;
-        char parity;
+        int32_t frame_number;
+        int16_t sequence_number;
+        int8_t requested_client_count;
+        uint8_t parity; // 0x80: valid, 0x01: the parity
     };
     int64_t value;
 } parity_response_t;
@@ -78,11 +78,11 @@ typedef struct _frame_response_t
 
     // atomic: the server reads them without taking the lock (only its thread changes
     // frame_number), and the client count changes on both sides
-    std::atomic<int> frame_number;
-    std::atomic<long> requested_client_count;
+    std::atomic<int32_t> frame_number;
+    std::atomic<int32_t> requested_client_count;
 
     std::atomic<bool> is_prefetch;
-    std::atomic<int> prefetch_hit;
+    std::atomic<int32_t> prefetch_hit;
 
     // frame properties of the frame in this response slot, protected by the lock
     props_slot_state_t props;
@@ -97,21 +97,21 @@ typedef struct alignas(64) _shared_memory_clip_info_t
     VideoInfo vi;
 
     // buffer size of ONE frame
-    unsigned int frame_buffer_size;
+    uint32_t frame_buffer_size;
     // relative to the beginning of the mapped region
-    unsigned int frame_buffer_offset[2];
+    uint32_t frame_buffer_offset[2];
 
-    int frame_pitch;
-    int frame_pitch_uv;
-    int frame_pitch_a;
+    int32_t frame_pitch;
+    int32_t frame_pitch_uv;
+    int32_t frame_pitch_a;
 
     // relative to the beginning of buffer 
-    int frame_offset_u;
-    int frame_offset_v;
-    int frame_offset_a;
+    int32_t frame_offset_u;
+    int32_t frame_offset_v;
+    int32_t frame_offset_a;
 
     // relative to the beginning of the mapped region, PROPS_INLINE_SIZE bytes each
-    unsigned int props_inline_offset[2];
+    uint32_t props_inline_offset[2];
     // --------------------------------------
 
     // the changing part starts on a cache line, so only one cache line is affected when
@@ -146,28 +146,28 @@ inline int plane_buffer_pitch(const shared_memory_clip_info_t& info, int plane)
     }
 }
 
-// the object state, local copy, packed into the long value of the shared object_state
+// the object state, local copy, packed into the 32 bit value of the shared object_state
 typedef union _object_state_t
 {
     struct
     {
-        unsigned short client_count;
-        unsigned char shutdown;
-        unsigned char sequence_number;
+        uint16_t client_count;
+        uint8_t shutdown;
+        uint8_t sequence_number;
     };
-    long state_value;
+    int32_t state_value;
 } object_state_t;
 
 typedef struct _shared_memory_source_header_t
 {
-    unsigned int signature;
-    int clip_count;
-    DWORD server_process_id; // for debugging
+    uint32_t signature;
+    int32_t clip_count;
+    uint32_t server_process_id; // for debugging
 
-    std::atomic<DWORD> client_process_ids[MAX_SLAVES + 1];
+    std::atomic<uint32_t> client_process_ids[MAX_SLAVES + 1];
 
     // object_state_t value, changed with compare_exchange
-    std::atomic<long> object_state;
+    std::atomic<int32_t> object_state;
 
     spin_lock_t request_lock;
     shared_request_slot_t request;
@@ -184,15 +184,17 @@ inline object_state_t load_object_state(const shared_memory_source_header_t* hea
     return state;
 }
 
-// The layout must be the same for every compiler and bitness (both sides of the mapping).
-// The atomics must be lock-free (address-free, so they work across processes) and have the
-// size and alignment of the plain types.
-static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_LONG_LOCK_FREE == 2 && ATOMIC_LLONG_LOCK_FREE == 2 && ATOMIC_BOOL_LOCK_FREE == 2,
+// The layout must be the same for every compiler, bitness and data model (both sides of the
+// mapping): fixed-width types only. The atomics must be lock-free (address-free, so they work
+// across processes) and have the size and alignment of the plain types.
+static_assert(std::atomic<int32_t>::is_always_lock_free && std::atomic<uint32_t>::is_always_lock_free &&
+    std::atomic<int64_t>::is_always_lock_free && std::atomic<bool>::is_always_lock_free,
     "The shared memory atomics must be lock-free.");
-static_assert(sizeof(std::atomic<int>) == 4 && sizeof(std::atomic<long>) == 4 && sizeof(std::atomic<DWORD>) == 4 && sizeof(std::atomic<bool>) == 1,
+static_assert(sizeof(bool) == 1, "bool must be 1 byte.");
+static_assert(sizeof(std::atomic<int32_t>) == 4 && sizeof(std::atomic<uint32_t>) == 4 && sizeof(std::atomic<bool>) == 1,
     "Unexpected std::atomic size.");
 static_assert(sizeof(std::atomic<int64_t>) == 8 && alignof(std::atomic<int64_t>) == 8, "std::atomic<int64_t> must be 8 bytes, 8 byte aligned.");
-static_assert(sizeof(object_state_t) == sizeof(long), "Size of object_state_t must be the same as size of long.");
+static_assert(sizeof(object_state_t) == sizeof(int32_t), "Size of object_state_t must be the same as size of int32_t.");
 static_assert(sizeof(parity_response_t) == sizeof(int64_t), "Size of parity_response_t must be the same as size of int64_t.");
 static_assert(alignof(shared_memory_clip_info_t) == 64, "shared_memory_clip_info_t must be 64 byte aligned.");
 static_assert(offsetof(shared_memory_clip_info_t, parity_response) % 64 == 0, "The changing part of shared_memory_clip_info_t must start on a cache line.");

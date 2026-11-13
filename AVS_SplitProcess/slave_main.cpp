@@ -5,8 +5,10 @@
 #include <string.h>
 #include "avisynth.h"
 #include "splitprocess.h"
+#include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 #include <assert.h>
 #include <io.h>
@@ -79,8 +81,8 @@ LONG WINAPI exit_on_unhandled_exception(struct _EXCEPTION_POINTERS *ExceptionInf
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-DWORD WINAPI exit_on_timeout(void*) {
-    Sleep(15000);
+void exit_on_timeout() {
+    std::this_thread::sleep_for(std::chrono::seconds(15));
     ExitProcess(253);
 }
 
@@ -249,7 +251,7 @@ int _tmain(int argc, _TCHAR* argv[])
         }
 
         // Not sure why slave processes do not exit sometimes... here is another hack
-        CreateThread(NULL, 0, exit_on_timeout, NULL, 0, NULL);
+        std::thread(exit_on_timeout).detach();
 #endif
     }
     env->DeleteScriptEnvironment();

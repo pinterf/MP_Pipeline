@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <thread>
 
 class ClipInfo
 {
@@ -45,7 +46,8 @@ typedef struct _FetchInfo
 class FrameFetcher
 {
 public:
-    FrameFetcher(const PClip clips[], int max_cache_frames, int cache_behind, IScriptEnvironment* env);
+    // worker_cpu: the logical processor the worker thread is locked to, -1: none
+    FrameFetcher(const PClip clips[], int max_cache_frames, int cache_behind, IScriptEnvironment* env, int worker_cpu = -1);
     ~FrameFetcher();
     
     PVideoFrame GetFrame(int clip_index, int n, IScriptEnvironment* env);
@@ -59,7 +61,6 @@ public:
     bool is_valid_clip_index(int index);
     void signal_shutdown();
 
-    bool set_worker_thread_affinity(DWORD_PTR affinity_mask);
 
     OwnedEventHandle new_frame_in_cache_event;
 protected:
@@ -67,7 +68,7 @@ protected:
 
 private:
     unsigned thread_proc();
-    static unsigned __stdcall thread_stub(void* fetcher);
+
     void invoke_in_worker_thread(std::function<void (void)> func);
     void work_item_completed(DWORD wait_time = INFINITE);
     void wait_for_work_item_complete();
@@ -85,7 +86,8 @@ private:
     FetchInfo _fetch_info; // protected by _lock
     std::function<void (void)> _worker_callback;
 
-    OwnedHandle _worker_thread;
+    int _worker_cpu;
+    std::thread _worker_thread;
     OwnedEventHandle _worker_workitem_completed_event;
     OwnedEventHandle _worker_waiting_for_work_event;
 };

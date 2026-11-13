@@ -235,7 +235,7 @@ void SharedMemorySourceManager::signal_shutdown()
             {
                 break;
             }
-            long old_state_value = state.state_value;
+            int32_t old_state_value = state.state_value;
             state.shutdown = 1;
             state.sequence_number++;
             if (header->object_state.compare_exchange_strong(old_state_value, state.state_value))
@@ -274,7 +274,7 @@ void SharedMemorySourceManager::init_client(const SYSCHAR* mapping_name)
     DWORD process_id = GetCurrentProcessId();
     for (int i = 0; i < MAX_SLAVES; i++)
     {
-        DWORD free_slot = 0;
+        uint32_t free_slot = 0;
         if (header->client_process_ids[i].compare_exchange_strong(free_slot, process_id))
         {
             break;
@@ -374,7 +374,7 @@ SharedMemorySourceManager::~SharedMemorySourceManager()
         DWORD process_id = GetCurrentProcessId();
         for (int i = 0; i < MAX_SLAVES; i++)
         {
-            DWORD own_slot = process_id;
+            uint32_t own_slot = process_id;
             if (header->client_process_ids[i].compare_exchange_strong(own_slot, 0))
             {
                 break;
@@ -390,7 +390,7 @@ void SharedMemorySourceClientLockAcquire::do_lock(short increment)
     while (true)
     {
         object_state_t state = load_object_state(_manager.header);
-        long old_state_value = state.state_value;
+        int32_t old_state_value = state.state_value;
         state.sequence_number++;
         state.client_count += increment;
         if (_manager.header->object_state.compare_exchange_strong(old_state_value, state.state_value))

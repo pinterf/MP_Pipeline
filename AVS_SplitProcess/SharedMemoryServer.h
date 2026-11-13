@@ -6,6 +6,7 @@
 #include "Handle.h"
 
 #include <atomic>
+#include <thread>
 #include <vector>
 
 class SharedMemoryServer : private SharedMemoryServer_parameter_storage_t, public GenericVideoFilter
@@ -20,7 +21,6 @@ public:
 
 private:
     unsigned thread_proc();
-    static unsigned __stdcall thread_stub(void* self);
 
     bool try_prefetch_frame();
 
@@ -40,7 +40,9 @@ private:
     FramePropsCaps _props_caps;
     // index: clip_index * 2 + response_index
     std::vector<std::unique_ptr<PropsWriter> > _props_writers;
-    OwnedHandle _thread_handle;
     std::vector<HANDLE> _activity_wait_handles;
     std::atomic<bool> _shutdown;
+    // set by the server thread when it has finished
+    std::atomic<bool> _thread_exited;
+    std::thread _thread;
 };

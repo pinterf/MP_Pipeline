@@ -1,16 +1,18 @@
 #pragma once
 
 #include <atomic>
+#include <stdint.h>
 #include <assert.h>
 
 // The lock word lives in the shared memory, the processes on both sides use it (also
-// win32 and win64 together): it must be a lock-free atomic of the same size everywhere.
-typedef long spin_lock_value_type_t;
+// win32 and win64 together): a lock-free 32 bit atomic, the same size with every compiler
+// and data model (long would be 64 bit on LP64 systems).
+typedef int32_t spin_lock_value_type_t;
 typedef std::atomic<spin_lock_value_type_t> spin_lock_t;
 static const spin_lock_value_type_t UNLOCKED = 0;
 
-static_assert(ATOMIC_LONG_LOCK_FREE == 2, "std::atomic<long> must be lock-free (shared between processes)");
-static_assert(sizeof(spin_lock_t) == sizeof(spin_lock_value_type_t), "std::atomic<long> must have the size of long");
+static_assert(spin_lock_t::is_always_lock_free, "std::atomic<int32_t> must be lock-free (shared between processes)");
+static_assert(sizeof(spin_lock_t) == sizeof(spin_lock_value_type_t), "std::atomic<int32_t> must have the size of int32_t");
 
 // Taking the lock is an acquire, releasing it a release operation: the data protected by
 // the lock (written before unlock) is visible to the next owner, on any compiler and CPU.
