@@ -14,10 +14,9 @@
 #include <functional>
 #include <algorithm>
 
-// For UUID functions
+// For UUID functions (link: rpcrt4)
 #include <rpc.h>
 #include "rpcdce.h"
-#pragma comment(lib, "rpcrt4.lib")
 
 #define BRANCH_STATEMENT_START "^\\s*### branch:"
 #define BRANCH_STATEMENT_PARAM "\\s*(\\d+)(?:\\s*,\\s*(\\d{1,7}))?\\s*$"

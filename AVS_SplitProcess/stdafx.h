@@ -14,4 +14,3 @@
 
 #include <Windows.h>
 
-#include "fast_memory_functions.h"

@@ -95,13 +95,7 @@
     <ClInclude Include="SpinLockImplementations.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="fast_memory_functions.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="avisynth.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="asmlib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="MP_Pipeline.def.h">
