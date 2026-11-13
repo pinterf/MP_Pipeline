@@ -42,8 +42,8 @@ Build:
     cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
     cmake --build build && sudo cmake --install build
   Output: libmp_pipeline.so and libmp_pipeline.so.slave, installed together into lib/avisynth (the
-  slave must be next to the plugin). No "### platform:" on Linux (an error), "### dll:" takes a
-  libavisynth.so path. Tested on Ubuntu 26.04 (GCC 15, Clang 21, AviSynth+ 3.7.6) and Ubuntu 22.04
+  slave must be next to the plugin). "### platform:" is ignored on Linux (a native slave), "### dll:"
+  takes a libavisynth.so path. Tested on Ubuntu 26.04 (GCC 15, Clang 21, AviSynth+ 3.7.6) and Ubuntu 22.04
   (GCC 13, AviSynth+ 3.7.5).
 A plugin folder needs the other bitness pair too: MP_Pipeline.dll.win32 / .win64 and its
 .slave.exe (the Visual Studio build copies them to the other platform's Output folder).
@@ -99,7 +99,8 @@ Change log:
 * Linux support (x86-64, GCC and Clang, AviSynth+ 3.7.5 and 3.7.6): the platform layer has a POSIX implementation
   (shared memory with shm_open, process-shared robust pthread events, posix_spawn, the slave ends with
   the master); libmp_pipeline.so with libmp_pipeline.so.slave next to it. "### platform:" is Windows
-  only. Tests: tests/Pipeline/run_tests.sh with the avs_run test host.
+  only, ignored on Linux (a native slave: scripts run unchanged). Tests: tests/Pipeline/run_tests.sh
+  with the avs_run test host.
 * Statements are matched line by line with std::regex::multiline where the C++ library has it: the
   newer MSVC (v145), libstdc++ and libc++ match ^ and $ only at the start and end of the whole text
   without it (statements were not found there; the v141 / v143 builds were not affected).

@@ -20,7 +20,7 @@ static const int MAX_EXPORTED_CLIPS = 8;
 
 #if !defined(_WIN32)
 
-// "### platform:" is Windows only (see platform::supports_other_platforms)
+// "### platform:" is Windows only, ignored elsewhere (see platform::supports_other_platforms)
 #define CURRENT_PLATFORM "native"
 
 #elif defined(_M_IX86) || defined(__i386__)

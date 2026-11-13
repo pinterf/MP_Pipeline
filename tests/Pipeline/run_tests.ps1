@@ -69,7 +69,6 @@ foreach ($platform in $Platforms) {
     "global MPP_DLL = ""$dll"""
     "global LOG_DIR = ""$logDir\"""
     "global OTHER_PLATFORM = ""$other"""
-    "global PLATFORMS_SUPPORTED = true"
   ) | Set-Content -Encoding ASCII (Join-Path $here "_config.avsi")
 
   Write-Host "=== $platform ($label)"

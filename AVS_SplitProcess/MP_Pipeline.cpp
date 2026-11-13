@@ -228,9 +228,10 @@ void MP_Pipeline::prepare_slave(slave_create_params* params, IScriptEnvironment*
 {
     params->slave_group = _slaves.get();
     scan_statement(params->script, PLATFORM_PATTERN, NULL, PLATFORM_SCAN_FORMAT, params->slave_platform);
-    if (params->slave_platform[0] && !platform::supports_other_platforms())
+    if (!platform::supports_other_platforms())
     {
-        env->ThrowError("MP_Pipeline: \"### platform: %s\": slaves of another platform are supported on Windows only", params->slave_platform);
+        // ignored (a native slave), so that scripts written for Windows run unchanged
+        params->slave_platform[0] = 0;
     }
 
     sprintf_append(params->script, "MPP_SharedMemoryServer(\"%s\", %s()", _instance_id, GET_OUTPUT_PORT_FUNCTION_NAME);
