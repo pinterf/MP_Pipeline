@@ -1,6 +1,7 @@
 # expect: MP_Pipeline: script block 2 has more than one ### platform statement
 # only one ### platform statement per block (the first one would win silently)
 Import(ScriptDir() + "_config.avsi")
+Assert(PLATFORMS_SUPPORTED, "SKIP: no ### platform on this system")
 LoadPlugin(MPP_DLL)
 MP_Pipeline("""
 ### platform: win32

@@ -1,6 +1,6 @@
 # ScriptDir(), ScriptFile(), ScriptName() (and the Utf8 versions) return the master's values in the slaves,
 # native and other bitness (OTHER_PLATFORM); when MP_Pipeline is called from an imported file, that
-# file's values (like in the master), see script_dir_sub\script_dir_import.avsi
+# file's values (like in the master), see script_dir_sub/script_dir_import.avsi
 # generated settings: MPP_DLL, LOG_DIR, OTHER_PLATFORM (see run_tests.ps1)
 Import(ScriptDir() + "_config.avsi")
 LoadPlugin(MPP_DLL)
@@ -36,6 +36,6 @@ function ScriptDirPipeline(string checks)
 function ScriptDirLine(int n) { return String(n) + " OK" }
 
 main = ScriptDirPipeline(ScriptDirChecks("script_dir.avs"))
-Import(ScriptDir() + "script_dir_sub\script_dir_import.avsi") # sets SCRIPT_DIR_IMPORTED
+Import(ScriptDir() + "script_dir_sub/script_dir_import.avsi") # sets SCRIPT_DIR_IMPORTED
 StackHorizontal(main, SCRIPT_DIR_IMPORTED)
 WriteFile(LOG_DIR + "script_dir.log", "ScriptDirLine(current_frame)")

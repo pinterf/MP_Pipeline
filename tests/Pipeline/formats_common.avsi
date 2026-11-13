@@ -57,14 +57,24 @@ function FormatsPlanes(clip c)
                   [c.ExtractY(), c.ExtractU(), c.ExtractV(), c.ExtractA()]
 }
 
-# one line per frame: "<n> OK" when every plane of every transferred clip equals the local one
-function FormatsCheckFrame(int n)
+# one line per frame: "<n> OK" when every plane of every transferred clip equals the local one;
+# bad: the labels of the differing planes
+function FormatsCheckLine(int n, string bad)
+{
+  return String(n) + (bad == "" ? " OK" : " FAIL" + bad)
+}
+
+# The WriteFile expression: the runtime functions (LumaDifference) are evaluated in the
+# expression itself. WriteFile sets current_frame in the caller's variable frame, a script function
+# does not see it (unless a plugin like GRunT sets it as a global, as on many Windows installations).
+function FormatsCheckExpression()
 {
   bad = ""
   for (k = 0, ArraySize(FORMATS_REMOTE) - 1) {
-    if (LumaDifference(FORMATS_REMOTE[k], FORMATS_LOCAL[k]) != 0.0) { bad = bad + " " + FORMATS_LABEL[k] }
+    bad = bad + (k > 0 ? " + " : "") + "(LumaDifference(FORMATS_REMOTE[" + String(k) + "], FORMATS_LOCAL[" + String(k) + "]) != 0.0 ? " \
+      + Chr(34) + " " + FORMATS_LABEL[k] + Chr(34) + " : " + Chr(34) + Chr(34) + ")"
   }
-  return String(n) + (bad == "" ? " OK" : " FAIL" + bad)
+  return "FormatsCheckLine(current_frame, " + bad + ")"
 }
 
 # Runs formats first .. first+7 through one slave (a process exports at most 8 clips) and
@@ -107,5 +117,5 @@ function FormatsVerify(clip pipeline, val remote, int first, string name)
   global FORMATS_REMOTE = r
   global FORMATS_LOCAL = l
   global FORMATS_LABEL = lab
-  return pipeline.ConvertToY().ConvertBits(8).WriteFile(LOG_DIR + name + ".log", "FormatsCheckFrame(current_frame)")
+  return pipeline.ConvertToY().ConvertBits(8).WriteFile(LOG_DIR + name + ".log", FormatsCheckExpression())
 }

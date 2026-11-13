@@ -62,24 +62,19 @@ function PropsSrcFrame(int n, string order)
          n
 }
 
-function PropsCheckFrame(clip c, int n, string order)
+# The properties of the frame, read by the WriteFile expression itself (see PropsVerify), checked here.
+function PropsCheckFrame(int n, string order, int keys, int fn, string s, val ia, val fa, bool s_utf8_ok)
 {
   # "none": an upstream block has "### frame props: off", no property may arrive
   if (order == "none") {
-    keys = propNumKeys(c)
     return String(n) + (keys == 0 ? " OK" : " FAIL keys=" + String(keys))
   }
   src = PropsSrcFrame(n, order)
   v = PropsVariant(src)
   size = PropsVariantSize(v)
   mark = PropsVariantMark(v)
-  fn = propGetType(c, "fn") == 0 ? -1 : propGetInt(c, "fn")
-  s = propGetType(c, "blob") == 0 ? "" : propGetString(c, "blob")
-  ia = propGetType(c, "i_arr") == 0 ? [0, 0, 0] : propGetAsArray(c, "i_arr")
-  fa = propGetType(c, "f_arr") == 0 ? [0.0, 0.0] : propGetAsArray(c, "f_arr")
   fixed_ok = ArraySize(ia) == 3 && ia[0] == 1 && ia[1] == -2 && ia[2] == 300 \
-    && ArraySize(fa) == 2 && fa[0] == 0.5 && fa[1] == -1.25 \
-    && propGetType(c, "s_utf8") != 0 && propGetString(c, "s_utf8") == "MP_Pipeline"
+    && ArraySize(fa) == 2 && fa[0] == 0.5 && fa[1] == -1.25 && s_utf8_ok
   blob_ok = StrLen(s) == size && (size == 0 || (LeftStr(s, 1) == mark && RightStr(s, 1) == mark))
   ok = fn == src && fixed_ok && blob_ok
   return String(n) + (ok ? " OK" : " FAIL src=" + String(src) + " fn=" + String(fn) + " blob_len=" + String(StrLen(s)) \
@@ -95,5 +90,15 @@ function PropsVerify(clip c, string name, string "order")
   c = order == "reverse" ? c.Reverse() : \
       order == "shuffle" ? c.SelectEvery(10, 3, 1, 4, 0, 9, 2, 6, 5, 8, 7) : \
       c
-  return c.WriteFile(LOG_DIR + name + ".log", "PropsCheckFrame(last, current_frame, " + Chr(34) + order + Chr(34) + ")")
+  # the runtime functions (propGet*) in the expression itself: WriteFile sets current_frame in the
+  # caller's variable frame, a script function does not see it (unless a plugin like GRunT sets
+  # it as a global, as on many Windows installations)
+  q = Chr(34)
+  expr = "PropsCheckFrame(current_frame, " + q + order + q + ", propNumKeys(last), " \
+    + "propGetType(last, " + q + "fn" + q + ") == 0 ? -1 : propGetInt(last, " + q + "fn" + q + "), " \
+    + "propGetType(last, " + q + "blob" + q + ") == 0 ? " + q + q + " : propGetString(last, " + q + "blob" + q + "), " \
+    + "propGetType(last, " + q + "i_arr" + q + ") == 0 ? [0, 0, 0] : propGetAsArray(last, " + q + "i_arr" + q + "), " \
+    + "propGetType(last, " + q + "f_arr" + q + ") == 0 ? [0.0, 0.0] : propGetAsArray(last, " + q + "f_arr" + q + "), " \
+    + "propGetType(last, " + q + "s_utf8" + q + ") != 0 && propGetString(last, " + q + "s_utf8" + q + ") == " + q + "MP_Pipeline" + q + ")"
+  return c.WriteFile(LOG_DIR + name + ".log", expr)
 }
