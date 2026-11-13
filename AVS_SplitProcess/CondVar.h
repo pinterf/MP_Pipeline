@@ -10,7 +10,7 @@
 class CondVar : NonCopyableClassBase
 {
 public:
-    CondVar(spin_lock_t* lock_ptr, const sys_string& event_name, bool is_server);
+    CondVar(spin_lock_t* lock_ptr, const sys_string& event_name, bool is_server, ActivitySignal* activity = NULL);
     void lock_short(); // expect the lock won't be held for a long time
     bool lock_long(unsigned timeout = INFINITE); // the lock may be held for a long time
     

@@ -9,6 +9,7 @@
 #include "CondVar.h"
 #include "slave_common.h"
 #include "PropsChannel.h"
+#include "ActivitySignal.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -17,9 +18,21 @@
 #include <vector>
 #include <memory>
 
-// change it whenever the layout below changes, so that mismatching server and client
-// binaries (e.g. a stale .win32/.win64 slave) fail cleanly instead of misreading the mapping
-static const unsigned int SHARED_MEMORY_SOURCE_SIGNATURE = 0x4d50534e;
+// Four ASCII characters as a 32 bit number, the first character in the highest byte (so the hex
+// value reads as the text; in memory, little-endian, the bytes are in reverse order).
+constexpr uint32_t make_signature(char c1, char c2, char c3, char c4)
+{
+    return ((uint32_t)(uint8_t)c1 << 24) | ((uint32_t)(uint8_t)c2 << 16) | ((uint32_t)(uint8_t)c3 << 8) | (uint32_t)(uint8_t)c4;
+}
+
+// Identifies the layout of the shared memory below ("MPS": MP_Pipeline shared memory, the last
+// character is the layout version). Change it whenever the layout or the meaning of a field
+// changes, so that mismatching server and client binaries (e.g. a stale .win32/.win64 slave)
+// fail cleanly instead of misreading the mapping. The next one is 'P'.
+//   "MPSN" (0x4d50534e): up to the 2.0 development
+//   "MPSO" (0x4d50534f): activity counter (ActivitySignal)
+static const uint32_t SHARED_MEMORY_SOURCE_SIGNATURE = make_signature('M', 'P', 'S', 'O');
+static_assert(SHARED_MEMORY_SOURCE_SIGNATURE == 0x4d50534f, "make_signature");
 
 // Planes of a frame in the order they are stored in the shared frame buffer, returns their count:
 // packed formats (RGB24/32/48/64, YUY2) and Y: 1 (PLANAR_Y means the whole packed frame),
@@ -169,6 +182,9 @@ typedef struct _shared_memory_source_header_t
     // object_state_t value, changed with compare_exchange
     std::atomic<int32_t> object_state;
 
+    // incremented on every activity the server thread has to look at (ActivitySignal)
+    std::atomic<uint32_t> activity;
+
     spin_lock_t request_lock;
     shared_request_slot_t request;
 
@@ -202,7 +218,7 @@ static_assert(offsetof(shared_memory_clip_info_t, parity_response) % 64 == 0, "T
 class ClipSyncGroup
 {
 public:
-    ClipSyncGroup(const sys_string& name, int clip_index, shared_memory_clip_info_t& clip_info, bool is_server);
+    ClipSyncGroup(const sys_string& name, int clip_index, shared_memory_clip_info_t& clip_info, bool is_server, ActivitySignal* activity);
     std::vector<std::unique_ptr<CondVar> > response_conds;
 };
 
@@ -235,6 +251,8 @@ public:
 
     void signal_shutdown();
 
+    // wakes the server thread; also signaled by the request and response locks
+    std::unique_ptr<ActivitySignal> activity;
     std::unique_ptr<CondVar> request_cond;
     std::unique_ptr<TwoSidedLock> parity_signal;
     std::vector< std::unique_ptr<ClipSyncGroup> > sync_groups;

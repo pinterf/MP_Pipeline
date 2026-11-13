@@ -63,7 +63,9 @@ public:
     void signal_shutdown();
 
 
-    OwnedEventHandle new_frame_in_cache_event;
+    // called after a frame was added to the cache, while holding the fetcher's lock (keep it
+    // short, don't call the fetcher from it); nullptr: no more calls after this returns
+    void set_new_frame_callback(std::function<void (void)> callback);
 protected:
     std::mutex _lock;
 
@@ -86,6 +88,7 @@ private:
 
     FetchInfo _fetch_info; // protected by _lock
     std::function<void (void)> _worker_callback;
+    std::function<void (void)> _new_frame_callback; // protected by _lock
 
     int _worker_cpu;
     std::thread _worker_thread;

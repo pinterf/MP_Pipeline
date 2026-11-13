@@ -53,6 +53,9 @@
     <ClInclude Include="FrameProps.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ActivitySignal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Handle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -164,6 +167,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SharedMemoryClient.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ActivitySignal.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="trace.cpp">

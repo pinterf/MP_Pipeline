@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <chrono>
 #include <system_error>
+#include "ActivitySignal.h"
 #include <exception>
 #include <memory>
 #include <sstream>
@@ -381,27 +382,8 @@ void SharedMemoryServer::initiate_shutdown()
 
 void SharedMemoryServer::wait_for_activity()
 {
-    assert(_activity_wait_handles.size() > 0 && _activity_wait_handles.size() < MAXIMUM_WAIT_OBJECTS);
-    DWORD result = WaitForMultipleObjectsEx((DWORD)_activity_wait_handles.size(), &_activity_wait_handles[0], FALSE, INFINITE, TRUE);
-    if (result == WAIT_IO_COMPLETION)
-    {
-        return;
-    } else if (result >= WAIT_OBJECT_0 && result < WAIT_OBJECT_0 + MAXIMUM_WAIT_OBJECTS) {
-        int index = result - WAIT_OBJECT_0;
-        assert(index < (int)_activity_wait_handles.size());
-        ResetEvent(_activity_wait_handles[index]);
-        return;
-    } else {
-        DWORD code = -1;
-        if (result == WAIT_FAILED)
-        {
-            code = GetLastError();
-        }
-        assert(false);
-        ostringstream ss;
-        ss << "Unexpected error: wait failed, result: " << result << ", code: " << code;
-        throw runtime_error(ss.str());
-    }
+    // a client request or slot release, a new frame in the fetcher cache, or shutdown
+    _manager.activity->wait();
 }
 
 SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, const VideoInfo vi_array[], const SharedMemoryServer_parameter_storage_t& o, IScriptEnvironment* env):
@@ -427,14 +409,9 @@ SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, cons
         }
     }
 
-    _activity_wait_handles.push_back(_fetcher.new_frame_in_cache_event.get());
-
-    _activity_wait_handles.push_back(_manager.request_cond->signal.get_event_this_side());
-    for (int i = 0; i < clip_count; i++)
-    {
-        _activity_wait_handles.push_back(_manager.sync_groups[i]->response_conds[0]->signal.get_event_this_side());
-        _activity_wait_handles.push_back(_manager.sync_groups[i]->response_conds[1]->signal.get_event_this_side());
-    }
+    // a frame in the fetcher cache may be prefetched into a response slot
+    ActivitySignal* activity = _manager.activity.get();
+    _fetcher.set_new_frame_callback([activity] { activity->signal(); });
 
     try
     {
@@ -462,6 +439,8 @@ SharedMemoryServer::~SharedMemoryServer()
     {
         _thread.join();
     }
+    // the fetcher (its worker may still run) outlives _manager and its activity signal
+    _fetcher.set_new_frame_callback(nullptr);
 }
 
 PVideoFrame SharedMemoryServer::GetFrame(int n, IScriptEnvironment* env)

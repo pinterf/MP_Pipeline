@@ -324,6 +324,7 @@
     <ClInclude Include="CondVar.h" />
     <ClInclude Include="FrameFetcher.h" />
     <ClInclude Include="FrameProps.h" />
+    <ClInclude Include="ActivitySignal.h" />
     <ClInclude Include="Handle.h" />
     <ClInclude Include="LocalEvent.h" />
     <ClInclude Include="NonCopyableClassBase.h" />
@@ -347,6 +348,7 @@
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ActivitySignal.cpp" />
     <ClCompile Include="trace.cpp" />
     <ClCompile Include="avisynth_init.cpp" />
     <ClCompile Include="CondVar.cpp" />

@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "TwoSidedLock.h"
+#include "ActivitySignal.h"
 #include <string>
 #include <stdexcept>
 #include <assert.h>
@@ -20,9 +21,11 @@ using namespace std;
 #define LOCK_NAME_SUFFIX_SERVER TEXT("_Server")
 #define LOCK_NAME_SUFFIX_CLIENT TEXT("_Client")
 
-TwoSidedLock::TwoSidedLock(const SYSCHAR* lock_prefix, const SYSCHAR* lock_name,  bool is_server_side) :
+TwoSidedLock::TwoSidedLock(const SYSCHAR* lock_prefix, const SYSCHAR* lock_name,  bool is_server_side, ActivitySignal* activity) :
     _event_this_side(NULL),
-    _event_other_side(NULL)
+    _event_other_side(NULL),
+    _is_server_side(is_server_side),
+    _activity(activity)
 {
     SYSCHAR buffer[1024];
     memset(buffer, 0, sizeof(buffer));
@@ -38,14 +41,24 @@ TwoSidedLock::TwoSidedLock(const SYSCHAR* lock_prefix, const SYSCHAR* lock_name,
     }
 }
 
+void TwoSidedLock::signal_activity_if(bool server_side_event_set)
+{
+    if (server_side_event_set && _activity)
+    {
+        _activity->signal();
+    }
+}
+
 void TwoSidedLock::switch_to_other_side()
 {
     _event_other_side.set();
+    signal_activity_if(!_is_server_side);
 }
 
 void TwoSidedLock::stay_on_this_side()
 {
     _event_this_side.set();
+    signal_activity_if(_is_server_side);
 }
 
 bool TwoSidedLock::wait_on_this_side(DWORD ms_timeout, BOOL apc_aware)
@@ -72,12 +85,7 @@ void TwoSidedLock::signal_all()
 {
     _event_this_side.set();
     _event_other_side.set();
-}
-
-HANDLE TwoSidedLock::get_event_this_side()
-{
-    assert(_event_this_side.is_valid());
-    return _event_this_side.get();
+    signal_activity_if(true);
 }
 
 void check_event(OwnedEventHandle& handle)

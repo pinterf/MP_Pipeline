@@ -6,9 +6,9 @@
 #include "utils.h"
 #include <assert.h>
 
-CondVar::CondVar(spin_lock_t* lock_ptr, const sys_string& event_name, bool is_server) :
+CondVar::CondVar(spin_lock_t* lock_ptr, const sys_string& event_name, bool is_server, ActivitySignal* activity) :
     lock(lock_ptr),
-    signal(event_name.c_str(), SYSTEXT("Cond"), is_server)
+    signal(event_name.c_str(), SYSTEXT("Cond"), is_server, activity)
 {
 }
 

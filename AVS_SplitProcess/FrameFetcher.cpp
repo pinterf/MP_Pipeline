@@ -172,9 +172,13 @@ void FrameFetcher::fetch_frame(ClipInfo& clip, int n)
             std::lock_guard<std::mutex> lock(_lock);
             TRACE("Adding frame %d to cache", clip.cache_frame_start + clip.frame_cache.size());
             clip.frame_cache.push_back(frame);
+            // under the lock: after set_new_frame_callback(nullptr) it is not called any more
+            if (_new_frame_callback)
+            {
+                _new_frame_callback();
+            }
         } // lock end
         fetch_start++;
-        new_frame_in_cache_event.pulse();
     }
 }
 
@@ -351,7 +355,7 @@ FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_
       _worker_cpu(worker_cpu),
       _worker_workitem_completed_event(true),
       _worker_waiting_for_work_event(false),
-      new_frame_in_cache_event(CreateEvent(NULL, TRUE, FALSE, NULL)),
+
       _shutdown(false)
 {
     if (_max_cache_frames <= 0)
@@ -366,10 +370,6 @@ FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_
 
     memset(&_fetch_info, 0, sizeof(_fetch_info));
 
-    if (!new_frame_in_cache_event.is_valid())
-    {
-        env->ThrowError("FrameFetcher: Unable to create event.");
-    }
 
     int i = 0;
     while (clips[i])
@@ -387,6 +387,12 @@ FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_
     } catch (const std::system_error&) {
         env->ThrowError("FrameFetcher: Can't start worker thread.");
     }
+}
+
+void FrameFetcher::set_new_frame_callback(std::function<void (void)> callback)
+{
+    std::lock_guard<std::mutex> lock(_lock);
+    _new_frame_callback = callback;
 }
 
 void FrameFetcher::signal_shutdown()

@@ -40,7 +40,6 @@ private:
     FramePropsCaps _props_caps;
     // index: clip_index * 2 + response_index
     std::vector<std::unique_ptr<PropsWriter> > _props_writers;
-    std::vector<HANDLE> _activity_wait_handles;
     std::atomic<bool> _shutdown;
     // set by the server thread when it has finished
     std::atomic<bool> _thread_exited;

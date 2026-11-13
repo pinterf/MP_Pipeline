@@ -55,13 +55,13 @@ int get_transfer_planes(const VideoInfo& vi, int planes[4])
     return vi.IsYUVA() || vi.IsPlanarRGBA() ? 4 : 3;
 }
 
-ClipSyncGroup::ClipSyncGroup(const sys_string& name, int clip_index, shared_memory_clip_info_t& clip_info, bool is_server)
+ClipSyncGroup::ClipSyncGroup(const sys_string& name, int clip_index, shared_memory_clip_info_t& clip_info, bool is_server, ActivitySignal* activity)
 {
     for (int i = 0; i < 2; i++)
     {
         tostringstream ss;
         ss << name << SYSTEXT("_") << clip_index << SYSTEXT("_Response") << i;
-        response_conds.push_back(unique_ptr<CondVar>(new CondVar(&clip_info.frame_response[i].lock, ss.str(), is_server)));
+        response_conds.push_back(unique_ptr<CondVar>(new CondVar(&clip_info.frame_response[i].lock, ss.str(), is_server, activity)));
     }
 }
 
@@ -269,7 +269,7 @@ void SharedMemorySourceManager::init_client(const SYSCHAR* mapping_name)
     if (header->signature != SHARED_MEMORY_SOURCE_SIGNATURE)
     {
         assert(false);
-        throw runtime_error("Invalid shared memory object.");
+        throw runtime_error("Invalid shared memory object (an MP_Pipeline.dll and its .slave.exe / .win32 / .win64 files from different versions?).");
     }
     DWORD process_id = GetCurrentProcessId();
     for (int i = 0; i < MAX_SLAVES; i++)
@@ -284,9 +284,11 @@ void SharedMemorySourceManager::init_client(const SYSCHAR* mapping_name)
 
 void SharedMemorySourceManager::init_sync_objects(const sys_string& key, int clip_count)
 {
+    activity = unique_ptr<ActivitySignal>(new ActivitySignal(key + SYSTEXT("_Activity"), header->activity, _is_server));
+
     tstring cond_event_name(key);
     cond_event_name.append(SYSTEXT("_CondEvent"));
-    request_cond = unique_ptr<CondVar>(new CondVar(&header->request_lock, cond_event_name, _is_server));
+    request_cond = unique_ptr<CondVar>(new CondVar(&header->request_lock, cond_event_name, _is_server, activity.get()));
 
     parity_signal = unique_ptr<TwoSidedLock>(new TwoSidedLock(key.c_str(), SYSTEXT("ParitySignal"), _is_server));
 
@@ -296,7 +298,7 @@ void SharedMemorySourceManager::init_sync_objects(const sys_string& key, int cli
     }
     for (int i = 0; i < clip_count; i++)
     {
-        sync_groups.push_back(unique_ptr<ClipSyncGroup>(new ClipSyncGroup(key, i, header->clips[i], _is_server)));
+        sync_groups.push_back(unique_ptr<ClipSyncGroup>(new ClipSyncGroup(key, i, header->clips[i], _is_server, activity.get())));
     }
 }
 
