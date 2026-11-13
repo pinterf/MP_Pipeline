@@ -299,6 +299,20 @@ void SharedMemorySourceManager::init_sync_objects(const sys_string& key, int cli
     {
         sync_groups.push_back(unique_ptr<ClipSyncGroup>(new ClipSyncGroup(key, i, header->clips[i], _is_server, activity.get())));
     }
+    if (!_is_server)
+    {
+        // a killed or crashed server would leave the client waiting forever
+        const uint32_t server = header->server_process_id;
+        request_cond->signal.watch_peer(server);
+        parity_signal->watch_peer(server);
+        for (auto& group : sync_groups)
+        {
+            for (auto& cond : group->response_conds)
+            {
+                cond->signal.watch_peer(server);
+            }
+        }
+    }
 }
 
 sys_string get_mapping_name(const sys_string& key)

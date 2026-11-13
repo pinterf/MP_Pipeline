@@ -4,6 +4,7 @@
 #include "avisynth.h"
 #include "SharedMemoryCommon.h"
 
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -19,6 +20,9 @@ public:
     int __stdcall SetCacheHints(int cachehints,int frame_range);
     const VideoInfo& __stdcall GetVideoInfo();
 private:
+    // GetFrame / GetParity without the handling of a lost server (PeerLostError)
+    PVideoFrame get_frame(int n, IScriptEnvironment* env);
+    bool get_parity(int n);
     // props_error receives a frame property transfer error; the caller reports it only after
     // finishing the slot bookkeeping, so the server is never left waiting for this client
     PVideoFrame create_frame(int response_index, IScriptEnvironment* env, std::string& props_error);
@@ -27,6 +31,7 @@ private:
     void check_shutting_down(IScriptEnvironment* env);
 
     bool _shutdown;
+    std::atomic<bool> _server_lost; // the server's process is gone (killed, crashed)
     SharedMemorySourceManager _manager;
     VideoInfo _vi;
     FramePropsCaps _props_caps;

@@ -175,7 +175,7 @@ typedef struct _shared_memory_source_header_t
 {
     uint32_t signature;
     int32_t clip_count;
-    uint32_t server_process_id; // for debugging
+    uint32_t server_process_id; // the clients watch it: a killed or crashed server ends their waits
 
     std::atomic<uint32_t> client_process_ids[MAX_SLAVES + 1];
 

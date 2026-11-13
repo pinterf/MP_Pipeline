@@ -76,6 +76,9 @@ Change log:
   "script block N must end with a clip" and "script block N: exported variable 'x' is not a clip"
 * Exporting more than 8 clips from a block: the error message tells the block number and the count
   ("script block N exports X clips, max. 8 are allowed"), it is checked before any slave starts
+* Fix: a slave killed or crashed while running no longer hangs the master and the other slaves: the
+  waiting side notices the lost process within about 0.3 s, and the error "The upstream slave process
+  ended unexpectedly." reaches the host; every slave ends and the shared memory is removed
 * More than one "### platform" statement in a block is an error (the first one was used silently)
 * AviSynth+ headers updated to interface V14
 * Build: Visual Studio 2026 (v143 toolset) for x86 / x64; the XP builds (ReleaseXP, v141_xp toolset) need

@@ -33,6 +33,7 @@ AVSValue __cdecl Create_SharedMemoryClient(AVSValue args, void* user_data, IScri
 SharedMemoryClient::SharedMemoryClient(const SharedMemoryClient_parameter_storage_t& o, IScriptEnvironment* env) :
     SharedMemoryClient_parameter_storage_t(o),
     _shutdown(false),
+    _server_lost(false),
     _manager(get_shared_memory_key(_instance_key, _port)),
     _vi(_manager.header->clips[_clip_index].vi),
     _props_caps(detect_frame_props_caps(env))
@@ -78,11 +79,15 @@ SharedMemoryClient::~SharedMemoryClient()
 
 bool SharedMemoryClient::is_shutting_down()
 {
-    return load_object_state(_manager.header).shutdown || _shutdown;
+    return load_object_state(_manager.header).shutdown || _shutdown || _server_lost;
 }
 
 void SharedMemoryClient::check_shutting_down(IScriptEnvironment* env)
 {
+    if (_server_lost)
+    {
+        env->ThrowError("SharedMemoryClient: %s", PeerLostError().what());
+    }
     if (is_shutting_down())
     {
         _manager.request_cond->signal.signal_all();
@@ -120,6 +125,29 @@ PVideoFrame SharedMemoryClient::create_frame(int response_index, IScriptEnvironm
 }
 
 PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
+{
+    try
+    {
+        return get_frame(n, env);
+    } catch (const PeerLostError&) {
+        _server_lost = true;
+    }
+    check_shutting_down(env); // throws
+    return NULL;
+}
+
+bool SharedMemoryClient::GetParity(int n)
+{
+    try
+    {
+        return get_parity(n);
+    } catch (const PeerLostError&) {
+        _server_lost = true;
+        return false;
+    }
+}
+
+PVideoFrame SharedMemoryClient::get_frame(int n, IScriptEnvironment* env)
 {
     SharedMemorySourceClientLockAcquire lock(_manager);
     check_shutting_down(env);
@@ -225,7 +253,7 @@ PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
     }
 }
 
-bool SharedMemoryClient::GetParity(int n)
+bool SharedMemoryClient::get_parity(int n)
 {
     SharedMemorySourceClientLockAcquire lock(_manager);
     auto& request = _manager.header->request;
