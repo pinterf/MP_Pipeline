@@ -27,6 +27,7 @@ AVSValue __cdecl Create_SharedMemoryClient(AVSValue args, void* user_data, IScri
     } catch (...) {
         env->ThrowError("SharedMemoryClient: Unknown exception");
     }
+    return AVSValue(); // not reached: ThrowError throws (it is not declared noreturn)
 }
 
 SharedMemoryClient::SharedMemoryClient(const SharedMemoryClient_parameter_storage_t& o, IScriptEnvironment* env) :

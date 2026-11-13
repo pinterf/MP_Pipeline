@@ -314,3 +314,6 @@ __pycache__/
 
 # Cake -
 # tools/
+
+# build_arm64_mingw.bat output
+/out/

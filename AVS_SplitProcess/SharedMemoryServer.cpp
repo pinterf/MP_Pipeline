@@ -54,6 +54,7 @@ AVSValue __cdecl Create_SharedMemoryServer(AVSValue args, void* user_data, IScri
     } catch (...) {
         env->ThrowError("SharedMemoryServer: Unknown exception");
     }
+    return AVSValue(); // not reached: ThrowError throws (it is not declared noreturn)
 }
 
 bool SharedMemoryServer::is_shutting_down() const

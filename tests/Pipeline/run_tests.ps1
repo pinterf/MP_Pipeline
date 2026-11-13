@@ -10,17 +10,21 @@
   (e.g. it needs a newer AviSynth+ than the installed one).
   error_*.avs scenarios must fail to load: their first line "# expect: <text>" is the
   text the error message must contain.
-  Needs the plugin built (Output\<platform>\<Configuration>) and AviSynth+ (V8+)
+  Needs the plugin built (Output\<platform>\<Configuration>, or a folder given with
+  -PluginDir: <PluginDir>\<platform>\, e.g. a CMake / MinGW build with the other bitness pair
+  copied next to it) and AviSynth+ (V8+)
   installed for the tested bitness; cross_bitness.avs needs both.
 
 .EXAMPLE
   .\run_tests.ps1 -AvsMeterDir D:\Tools\AVSMeter
   .\run_tests.ps1 -AvsMeterDir D:\Tools\AVSMeter -Platforms x64 -Tests prefetch,reverse
+  .\run_tests.ps1 -AvsMeterDir D:\Tools\AVSMeter -PluginDir D:\mpp_mingw   (x64\ and Win32\ in it)
 #>
 param(
   [Parameter(Mandatory = $true)] [string] $AvsMeterDir,   # folder of AVSMeter.exe / AVSMeter64.exe
   [string[]] $Platforms = @("x64", "Win32"),
   [string] $Configuration = "Release",
+  [string] $PluginDir = "",                                # instead of Output\<platform>\<Configuration>: <PluginDir>\<platform>
   [string[]] $Tests = @(),                                 # scenario names, default: all
   [int] $TimeoutSec = 600,
   # record overflow mapping events (MPP_TRACE_PROPS) per scenario into out\<platform>\<scenario>.props_trace.txt;
@@ -47,7 +51,13 @@ function Get-LogNames($scenario) {
 foreach ($platform in $Platforms) {
   $is64 = $platform -eq "x64"
   $meter = Join-Path $AvsMeterDir ($(if ($is64) { "AVSMeter64.exe" } else { "AVSMeter.exe" }))
-  $dll = Join-Path $root "Output\$platform\$Configuration\MP_Pipeline.dll"
+  if ($PluginDir) {
+    $dll = Join-Path $PluginDir "$platform\MP_Pipeline.dll"
+    $label = $dll
+  } else {
+    $dll = Join-Path $root "Output\$platform\$Configuration\MP_Pipeline.dll"
+    $label = $Configuration
+  }
   if (-not (Test-Path $meter)) { throw "Not found: $meter" }
   if (-not (Test-Path $dll)) { throw "Not found: $dll (build $Configuration|$platform first)" }
 
@@ -61,7 +71,7 @@ foreach ($platform in $Platforms) {
     "global OTHER_PLATFORM = ""$other"""
   ) | Set-Content -Encoding ASCII (Join-Path $here "_config.avsi")
 
-  Write-Host "=== $platform ($Configuration)"
+  Write-Host "=== $platform ($label)"
   foreach ($scenario in $scenarios) {
     $logs = Get-LogNames $scenario
     foreach ($l in $logs) { Remove-Item -ErrorAction SilentlyContinue (Join-Path $logDir "$l.log") }

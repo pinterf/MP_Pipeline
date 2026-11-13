@@ -97,7 +97,11 @@ void error_box(char* format, ...) {
 int silent_error_messages() {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
     SetUnhandledExceptionFilter(exit_on_unhandled_exception);
+#if defined(_MSC_VER) || defined(_UCRT)
+    // the old msvcrt.dll of MinGW (MSYS2 MINGW32 / MINGW64) has no _set_abort_behavior;
+    // the loop below sets it in every loaded VC runtime anyway
     _set_abort_behavior(0, _CALL_REPORTFAULT | _WRITE_ABORT_MSG);
+#endif
     _set_error_mode(_OUT_TO_STDERR);
 
     // Dirty hack to silent abort message box by other versions of VC runtime

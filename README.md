@@ -8,6 +8,9 @@ Keep all four files of a folder together: MP_Pipeline.dll and MP_Pipeline.dll.sl
 the other bitness pair (.win64 / .win32 files) used by "### platform" blocks of the other bitness.
 Mixed bitness needs both the 32 and 64 bit AviSynth to be installed.
 The _xp builds run on Windows XP as well (Visual C++ v141_xp toolset).
+Runtime: Microsoft Visual C++ 2015-2022 Redistributable, 14.44 or newer (on Windows 7: 14.44.35211,
+the last version installing there, the same as AviSynth+ needs). The _xp builds need the last XP
+compatible one on XP, 14.27.29114 (14.28.29213 was reported to work too).
 
 MP_Pipeline 2.0
 
@@ -22,6 +25,20 @@ See Documentation/MP_Pipeline_readme_avsplus.avs and MP_Pipeline_frameprops_demo
 
 Tests: tests/Pipeline/run_tests.ps1 (AVSMeter based pipeline tests) and
 tests/FrameProps (serializer unit test), see the comments in the files.
+
+Build:
+- Visual Studio: AVS_SplitProcess.sln. Release (x86, x64): Visual Studio 2026 (v143 toolset);
+  ReleaseXP: Visual Studio 2022 (v141_xp toolset, VS 2026 has none).
+- CMake (MinGW GCC / Clang, llvm-mingw): CMakeLists.txt, e.g. in an MSYS2 MinGW shell
+    cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+    cmake --build build
+  The C++ runtime is linked statically. MSVC uses the solution.
+  A MinGW build works with a MinGW built AviSynth+ only (C++ exceptions of the AviSynth interface).
+- Windows on ARM64: build_arm64_mingw.bat, cross-compiled on x64 Windows with llvm-mingw
+  (https://github.com/mstorsjo/llvm-mingw, UCRT flavour; set LLVM_MINGW_ROOT), CMake and Ninja.
+  Output: out\ARM64\llvm-mingw. The toolchain file is cmake/toolchains/llvm-mingw-aarch64.cmake.
+A plugin folder needs the other bitness pair too: MP_Pipeline.dll.win32 / .win64 and its
+.slave.exe (the Visual Studio build copies them to the other platform's Output folder).
 
 #######################################################
 Change log:
@@ -63,6 +80,14 @@ Change log:
 * Build: no external libraries. The asmlib memory/string functions (lib/alibcof*.lib) are replaced by
   the standard ones (today's compilers and runtimes are as fast or faster); the unused AviSynth import
   libraries and the lib folder are removed. Links only system libraries (rpcrt4, psapi).
+* Source: synchronization with standard C++ (std::atomic, std::mutex) instead of the Interlocked
+  functions, volatile and critical sections. The spin locks in the shared memory take and release
+  with acquire / release ordering: correct with every compiler and CPU (the old volatile store
+  relied on MSVC's x86/x64 behavior, a prerequisite for ARM64). The shared memory layout is unchanged.
+* Build: CMake build for MinGW (GCC, Clang) and llvm-mingw; Windows on ARM64 build (build_arm64_mingw.bat,
+  cross-compiled with llvm-mingw, for the llvm-mingw built ARM64 AviSynth+). A MinGW build needs a MinGW
+  built AviSynth+ in its process (the C++ exceptions of the AviSynth interface differ between MSVC and
+  MinGW), the MSVC builds an MSVC built one.
 * Documentation: frame properties, pixel formats, ### frame props statement;
   new demo script Documentation/MP_Pipeline_frameprops_demo.avs
 * Tests: tests/Pipeline (AVSMeter based pipeline tests, run_tests.ps1) and tests/FrameProps
