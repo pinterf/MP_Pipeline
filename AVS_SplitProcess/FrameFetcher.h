@@ -3,10 +3,8 @@
 #include "avisynth.h"
 #include <atomic>
 #include <mutex>
-#include "Handle.h"
 #include "LocalEvent.h"
 
-#include <Windows.h>
 #include <deque>
 #include <vector>
 #include <string>
@@ -73,7 +71,7 @@ private:
     unsigned thread_proc();
 
     void invoke_in_worker_thread(std::function<void (void)> func);
-    void work_item_completed(DWORD wait_time = INFINITE);
+    void work_item_completed(unsigned wait_time = LocalEvent::WAIT_INFINITE);
     void wait_for_work_item_complete();
     
     void fetch_frame(ClipInfo& clip, int n);

@@ -165,7 +165,7 @@ PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
                 break;
             }
         }
-        _manager.request_cond->signal.wait_on_this_side(INFINITE);
+        _manager.request_cond->signal.wait_on_this_side(platform::WAIT_INFINITE);
     }
     while (true)
     {
@@ -221,7 +221,7 @@ PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
         }
         // there is a race condition here if multiple clients are connected to the same server
         // it is handled on server side
-        cond.signal.wait_on_this_side(INFINITE);
+        cond.signal.wait_on_this_side(platform::WAIT_INFINITE);
     }
 }
 
@@ -249,7 +249,7 @@ bool SharedMemoryClient::GetParity(int n)
                 break;
             }
         }
-        _manager.request_cond->signal.wait_on_this_side(INFINITE);
+        _manager.request_cond->signal.wait_on_this_side(platform::WAIT_INFINITE);
     }
     parity_response_t result;
     while (true)
@@ -262,7 +262,7 @@ bool SharedMemoryClient::GetParity(int n)
         result.value = result_reference.load();
         if (result.frame_number != n || (result.parity & 0x80) == 0)
         {
-            _manager.parity_signal->wait_on_this_side(INFINITE);
+            _manager.parity_signal->wait_on_this_side(platform::WAIT_INFINITE);
             continue;
         }
         while (true)

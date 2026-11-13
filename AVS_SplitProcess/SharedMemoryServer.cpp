@@ -97,7 +97,7 @@ void SharedMemoryServer::process_get_parity(const shared_memory_source_request_t
             {
                 return;
             } else {
-                Sleep(0);
+                std::this_thread::yield();
                 continue;
             }
         }
@@ -105,7 +105,7 @@ void SharedMemoryServer::process_get_parity(const shared_memory_source_request_t
         assert(result.requested_client_count >= 0);
         if (result.requested_client_count > 0)
         {
-            Sleep(0);
+            std::this_thread::yield();
             continue;
         }
 
@@ -124,7 +124,7 @@ void SharedMemoryServer::process_get_parity(const shared_memory_source_request_t
         {
             return;
         } else {
-            Sleep(0);
+            std::this_thread::yield();
             continue;
         }
     }
@@ -417,7 +417,7 @@ SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, cons
     {
         _thread = std::thread([this] {
             // a failed affinity is ignored: the server works without it
-            lock_current_thread_to_cpu(_server_thread_lock_to_cpu);
+            platform::lock_current_thread_to_cpu(_server_thread_lock_to_cpu);
             thread_proc();
             _thread_exited = true;
         });

@@ -15,7 +15,7 @@
 #include <atomic>
 #include <stdint.h>
 
-#include "Handle.h"
+#include "platform.h"
 #include "NonCopyableClassBase.h"
 #include "SystemChar.h"
 
@@ -31,5 +31,5 @@ public:
 private:
     std::atomic<uint32_t>& _counter;
     uint32_t _last_seen;
-    OwnedEventHandle _event;
+    platform::NamedEvent _event;
 };

@@ -39,7 +39,3 @@ static T __inline aligned(T size, int alignment = CACHE_LINE_SIZE)
 
 void copy_plane(unsigned char* dst, int dst_pitch, PVideoFrame& frame, const VideoInfo& vi, int plane);
 void copy_plane(PVideoFrame& frame, const unsigned char* src, int src_pitch, const VideoInfo& vi, int plane);
-
-// Locks the calling thread to one logical processor (cpu < 0: no change). Called by the thread
-// itself, so it works with any std::thread implementation. Returns false on failure.
-bool lock_current_thread_to_cpu(int cpu);

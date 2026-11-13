@@ -1,7 +1,7 @@
 #pragma once
 
 #include "avisynth.h"
-#include "Handle.h"
+#include "platform.h"
 #include "TwoSidedLock.h"
 #include "NonCopyableClassBase.h"
 #include "SystemChar.h"
@@ -261,11 +261,10 @@ private:
     void init_server(const SYSCHAR* mapping_name, int clip_count, const VideoInfo vi_array[]);
     void init_client(const SYSCHAR* mapping_name);
     void init_sync_objects(const sys_string& key, int clip_count);
-    void map_view();
 
     bool _is_server;
 
-    OwnedHandle _mapping_handle;
+    platform::SharedMapping _mapping;
     
 };
 

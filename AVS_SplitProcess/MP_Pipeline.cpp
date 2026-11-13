@@ -14,9 +14,7 @@
 #include <functional>
 #include <algorithm>
 
-// For UUID functions (link: rpcrt4)
-#include <rpc.h>
-#include "rpcdce.h"
+#include "platform.h"
 
 #define BRANCH_STATEMENT_START "^\\s*### branch:"
 #define BRANCH_STATEMENT_PARAM "\\s*(\\d+)(?:\\s*,\\s*(\\d{1,7}))?\\s*$"
@@ -63,12 +61,12 @@ MP_Pipeline::MP_Pipeline(const MP_Pipeline_parameter_storage_t& o, IScriptEnviro
     : MP_Pipeline_parameter_storage_t(o)
 {
     memset(_instance_id, 0, sizeof(_instance_id));
-    UUID uuid;
-    UuidCreate(&uuid);
-    RPC_CSTR uuid_str = NULL;
-    UuidToStringA(&uuid, &uuid_str);
-    strncpy(_instance_id, (const char*)uuid_str, ARRAYSIZE(_instance_id) - 1);
-    RpcStringFreeA(&uuid_str);
+    const std::string instance_id = platform::new_unique_id();
+    if (instance_id.empty())
+    {
+        env->ThrowError("MP_Pipeline: Unable to create a unique instance id.");
+    }
+    strncpy(_instance_id, instance_id.c_str(), sizeof(_instance_id) - 1);
 
     memset(&_slave_stdin_handles, 0, sizeof(_slave_stdin_handles));
 
@@ -507,53 +505,23 @@ int count_bits_set(T number)
 
 int get_cpu_arrangement(int* arrangement)
 {
-    ULONG_PTR cpu_groups[MAX_CPU];
+    platform::ProcessorTopology topology;
+    if (!platform::get_processor_topology(topology))
+    {
+        TRACE("Unable to get the processor topology.");
+        return 0;
+    }
+
+    uint64_t cpu_groups[MAX_CPU];
     memset(cpu_groups, 0, sizeof(cpu_groups));
 
     int cpu_group_count = 0;
     int logical_processor_count = 0;
-
-    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION buffer = NULL;
+    for (size_t i = 0; i < topology.core_masks.size() && cpu_group_count < MAX_CPU; i++)
     {
-        auto cleanup = make_scope_exit([&] { free(buffer); });
-        DWORD buffer_size = 0;
-
-        while (true)
-        {
-            BOOL result = GetLogicalProcessorInformation(buffer, &buffer_size);
-            if (result)
-            {
-                break;
-            }
-            free(buffer);
-            buffer = NULL;
-
-            DWORD code = GetLastError();
-            if (code != ERROR_INSUFFICIENT_BUFFER)
-            {
-                TRACE("GetLogicalProcessorInformation failed, code = %d", code);
-                return 0;
-            }
-            buffer = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION)malloc(buffer_size);
-            if (!buffer)
-            {
-                TRACE("Unable to allocate buffer for GetLogicalProcessorInformation.");
-                return 0;
-            }
-        }
-        auto ptr = buffer;
-        while (buffer_size >= sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION) && cpu_group_count < MAX_CPU)
-        {
-            if (ptr->Relationship == RelationProcessorCore)
-            {
-                cpu_groups[cpu_group_count] = ptr->ProcessorMask;
-                cpu_group_count++;
-                logical_processor_count += count_bits_set(ptr->ProcessorMask);
-            }
-            ptr++;
-            buffer_size -= sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); 
-        }
-
+        cpu_groups[cpu_group_count] = topology.core_masks[i];
+        cpu_group_count++;
+        logical_processor_count += count_bits_set(topology.core_masks[i]);
     }
 
     if (logical_processor_count <= 0)
@@ -563,19 +531,13 @@ int get_cpu_arrangement(int* arrangement)
         return 0;
     }
 
-    DWORD_PTR dummy = 0, system_affinity_mask = 0;
-    if (!GetProcessAffinityMask(GetCurrentProcess(), &dummy, &system_affinity_mask))
-    {
-        TRACE("GetProcessAffinityMask failed, code = %d", GetLastError());
-        return 0;
-    }
+    const uint64_t system_affinity_mask = topology.usable_mask;
     int usable_processor_count = count_bits_set(system_affinity_mask);
     if (usable_processor_count > logical_processor_count)
     {
         assert(false);
         return 0;
     }
-
     int current_group = 0;
     // fill the arrangement array, ensure different processes are spreaded over all available cores, aware of hyper-threading
     for (int lp_i = 0; lp_i < (std::min)(usable_processor_count, MAX_CPU); lp_i++)
@@ -585,7 +547,7 @@ int get_cpu_arrangement(int* arrangement)
             bool found_cpu = false;
             for (int c_i = 0; c_i < MAX_CPU; c_i++)
             {
-                ULONG_PTR mask = ((ULONG_PTR)1) << c_i;
+                uint64_t mask = ((uint64_t)1) << c_i;
                 if ((cpu_groups[current_group] & mask) == mask)
                 {
                     cpu_groups[current_group] &= ~mask;

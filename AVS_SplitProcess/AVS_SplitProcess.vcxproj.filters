@@ -56,9 +56,6 @@
     <ClInclude Include="ActivitySignal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Handle.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="LocalEvent.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -78,6 +75,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="NonCopyableClassBase.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="platform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SharedMemoryServer.h">
@@ -134,6 +134,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ThunkedInterleave.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="platform_win32.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PropsChannel.cpp">

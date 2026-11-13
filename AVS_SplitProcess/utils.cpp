@@ -98,16 +98,3 @@ void copy_plane(PVideoFrame& frame, const unsigned char* src, int src_pitch, con
 {
     copy_plane(frame->GetWritePtr(plane), frame->GetPitch(plane), src, src_pitch, vi, plane);
 }
-
-bool lock_current_thread_to_cpu(int cpu)
-{
-    if (cpu < 0)
-    {
-        return true;
-    }
-    if (cpu >= (int)(sizeof(DWORD_PTR) * 8))
-    {
-        return false;
-    }
-    return SetThreadAffinityMask(GetCurrentThread(), ((DWORD_PTR)1) << cpu) != 0;
-}

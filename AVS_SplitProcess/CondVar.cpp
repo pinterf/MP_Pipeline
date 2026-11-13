@@ -46,7 +46,7 @@ bool CondVar::lock_long(unsigned timeout)
         {
             break;
         }
-        if (!signal.wait_on_this_side(timeout, TRUE))
+        if (!signal.wait_on_this_side(timeout))
         {
             return false;
         }

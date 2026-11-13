@@ -1,12 +1,16 @@
 #pragma once
 
-#include <Windows.h>
-#include "Handle.h"
+#include <memory>
+
+#include "platform.h"
 #include "SystemChar.h"
 #include "NonCopyableClassBase.h"
 
 class ActivitySignal;
 
+// Two named manual-reset events between the server and a client process: one for each side.
+// The server creates them ("<prefix>_<name>_Server", initially set, and "..._Client"), the client
+// opens them. A side waits on its own event and sets the other one to hand over.
 class TwoSidedLock : private NonCopyableClassBase
 {
 public:
@@ -16,20 +20,16 @@ public:
 
     void switch_to_other_side();
     void stay_on_this_side();
-    bool wait_on_this_side(DWORD ms_timeout, BOOL apc_aware = FALSE);
+    // true: signaled (and reset), false: timeout
+    bool wait_on_this_side(unsigned ms_timeout);
     void signal_all();
 
 private:
-    OwnedEventHandle _event_this_side, _event_other_side;
+    std::unique_ptr<platform::NamedEvent> _event_this_side, _event_other_side;
     const bool _is_server_side;
     ActivitySignal* const _activity;
 
     void signal_activity_if(bool server_side_event_set);
-
-    TwoSidedLock(const TwoSidedLock&);
-    
-    void create_server(const SYSCHAR* lock_name);
-    void create_client(const SYSCHAR* lock_name);
 };
 
 class TwoSidedLockContext : private NonCopyableClassBase

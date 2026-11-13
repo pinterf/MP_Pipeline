@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <assert.h>
 
+#include "platform.h"
+
 // The lock word lives in the shared memory, the processes on both sides use it (also
 // win32 and win64 together): a lock-free 32 bit atomic, the same size with every compiler
 // and data model (long would be 64 bit on LP64 systems).
@@ -66,7 +68,7 @@ public:
 private:
     spin_lock_value_type_t get_lock_value()
     {
-        return (spin_lock_value_type_t)GetCurrentThreadId();
+        return (spin_lock_value_type_t)platform::current_thread_id();
     }
     spin_lock_t* _lock_ptr;
 };

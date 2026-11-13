@@ -1,8 +1,9 @@
 #pragma once
 
-#include <Windows.h>
 #include <assert.h>
+#include <thread>
 
+#include "platform.h"
 #include "SpinLockImplementations.h"
 
 void fill_processor_count();
@@ -67,7 +68,7 @@ private:
             if (!result && spin_count > 0)
             {
                 // just try once more
-                Sleep(0);
+                std::this_thread::yield();
                 result = impl.try_lock_once();
             }
             return result;
@@ -82,7 +83,7 @@ private:
             spin_count--;
             if (is_sleep_lock && spin_count > 0)
             {
-                Sleep(0);
+                std::this_thread::yield();
             }
         }
         return false;

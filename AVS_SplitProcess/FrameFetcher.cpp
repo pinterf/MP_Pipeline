@@ -1,5 +1,6 @@
 #include "common.h"
 #include "FrameFetcher.h"
+#include "platform.h"
 
 // #define ENABLE_TRACING
 #define TRACE_PREFIX __TRACE_TEXT("FrameFetcher")
@@ -18,7 +19,7 @@ using namespace std;
 unsigned FrameFetcher::thread_proc()
 {
     // a failure is ignored, as before: the fetcher works without the affinity
-    lock_current_thread_to_cpu(_worker_cpu);
+    platform::lock_current_thread_to_cpu(_worker_cpu);
     try
     {
         while (!_shutdown)
@@ -101,7 +102,7 @@ unsigned FrameFetcher::thread_proc()
 
             if (!clip_to_fetch)
             {
-                work_item_completed(has_no_work ? INFINITE : 10);
+                work_item_completed(has_no_work ? LocalEvent::WAIT_INFINITE : 10);
                 continue;
             }
 
@@ -118,10 +119,10 @@ unsigned FrameFetcher::thread_proc()
     return 0;
 }
 
-void FrameFetcher::work_item_completed(DWORD wait_time)
+void FrameFetcher::work_item_completed(unsigned wait_time)
 {
     _worker_workitem_completed_event.set();
-    _worker_waiting_for_work_event.wait(wait_time == INFINITE ? LocalEvent::WAIT_INFINITE : (unsigned)wait_time);
+    _worker_waiting_for_work_event.wait(wait_time);
 }
 
 void FrameFetcher::fetch_frame(ClipInfo& clip, int n)

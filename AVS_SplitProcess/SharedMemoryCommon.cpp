@@ -8,6 +8,8 @@
 #include <stdexcept>
 #include <assert.h>
 #include <sstream>
+#include <chrono>
+#include <thread>
 #include "utils.h"
 
 using namespace std;
@@ -83,7 +85,7 @@ int get_response_index(int frame_number)
 }
 
 
-void add_guard_bytes(unsigned char* address, DWORD buffer_size)
+void add_guard_bytes(unsigned char* address, uint32_t buffer_size)
 {
     for (int i = 0; i < 4; i++)
     {
@@ -95,7 +97,7 @@ void add_guard_bytes(unsigned char* address, DWORD buffer_size)
     }
 }
 
-void check_guard_bytes(unsigned char* address, DWORD buffer_size)
+void check_guard_bytes(unsigned char* address, uint32_t buffer_size)
 {
 #if _DEBUG
     for (int i = 0; i < 4; i++)
@@ -111,10 +113,10 @@ void check_guard_bytes(unsigned char* address, DWORD buffer_size)
 
 // Fills the immutable part of a clip info (layout of its buffers in the mapping), from
 // mapping_size on; returns the mapping size after the clip's buffers.
-static DWORD compute_clip_layout(shared_memory_clip_info_t& info, const VideoInfo& vi, DWORD mapping_size)
+static uint32_t compute_clip_layout(shared_memory_clip_info_t& info, const VideoInfo& vi, uint32_t mapping_size)
 {
     info.vi = vi;
-    DWORD clip_buffer_size = aligned(info.vi.RowSize()) * info.vi.height;
+    uint32_t clip_buffer_size = aligned(info.vi.RowSize()) * info.vi.height;
     info.frame_pitch = aligned(info.vi.RowSize(), FRAME_ALIGN);
 
     int planes[4];
@@ -164,33 +166,36 @@ void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int cli
     assert(clip_count > 0);
 
     // the clip infos are part of the header, the frame buffers follow them
-    const DWORD header_size = aligned((DWORD)(sizeof(shared_memory_source_header_t) + sizeof(shared_memory_clip_info_t) * clip_count));
+    const uint32_t header_size = aligned((uint32_t)(sizeof(shared_memory_source_header_t) + sizeof(shared_memory_clip_info_t) * clip_count));
 
     // 1st pass: the size of the mapping (the layout is computed again into the mapping)
-    DWORD mapping_size = header_size;
+    uint32_t mapping_size = header_size;
     for (int clip_i = 0; clip_i < clip_count; clip_i++)
     {
         shared_memory_clip_info_t scratch;
         mapping_size = compute_clip_layout(scratch, vi_array[clip_i], mapping_size);
     }
 
-    _mapping_handle.replace(CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, mapping_size, mapping_name));
-    if (!_mapping_handle.is_valid())
+    switch (_mapping.create(mapping_name, mapping_size))
     {
+    case platform::SharedMapping::OK:
+        break;
+    case platform::SharedMapping::ALREADY_EXISTS:
+        throw runtime_error("The file mapping object already exists.");
+    case platform::SharedMapping::MAP_FAILED:
+        assert(false);
+        throw runtime_error("MapViewOfFile failed.");
+    default:
         assert(false);
         throw runtime_error("Unable to create file mapping object.");
     }
-    if (GetLastError() == ERROR_ALREADY_EXISTS)
-    {
-        throw runtime_error("The file mapping object already exists.");
-    }
-    map_view();
+    header = (shared_memory_source_header_t*)_mapping.data();
 
     // a new mapping is zero filled: every atomic, lock and counter starts as 0
     header->signature = SHARED_MEMORY_SOURCE_SIGNATURE;
     header->clip_count = clip_count;
-    header->server_process_id = GetCurrentProcessId();
-    DWORD offset = header_size;
+    header->server_process_id = platform::current_process_id();
+    uint32_t offset = header_size;
     for (int i = 0; i < clip_count; i++)
     {
         shared_memory_clip_info_t& info = header->clips[i];
@@ -205,16 +210,7 @@ void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int cli
     }
     assert(offset == mapping_size);
 }
-void SharedMemorySourceManager::map_view()
-{
-    header = (shared_memory_source_header_t*)MapViewOfFile(_mapping_handle.get(), FILE_MAP_WRITE, 0, 0, 0);
-    if (!header)
-    {
-        DWORD error_code = GetLastError();
-        assert(false);
-        throw runtime_error("MapViewOfFile failed.");
-    }
-}
+
 
 void SharedMemorySourceManager::check_data_buffer_integrity(int clip_index, int response_object_id)
 {
@@ -258,20 +254,24 @@ void SharedMemorySourceManager::signal_shutdown()
 
 void SharedMemorySourceManager::init_client(const SYSCHAR* mapping_name)
 {
-    _mapping_handle.replace(OpenFileMapping(FILE_MAP_WRITE, FALSE, mapping_name));
-    if (!_mapping_handle.is_valid())
+    switch (_mapping.open(mapping_name, true))
     {
-        DWORD error_code = GetLastError();
+    case platform::SharedMapping::OK:
+        break;
+    case platform::SharedMapping::MAP_FAILED:
+        assert(false);
+        throw runtime_error("MapViewOfFile failed.");
+    default:
         assert(false);
         throw runtime_error("Unable to open the file mapping object, maybe the server is closed.");
     }
-    map_view();
+    header = (shared_memory_source_header_t*)_mapping.data();
     if (header->signature != SHARED_MEMORY_SOURCE_SIGNATURE)
     {
         assert(false);
         throw runtime_error("Invalid shared memory object (an MP_Pipeline.dll and its .slave.exe / .win32 / .win64 files from different versions?).");
     }
-    DWORD process_id = GetCurrentProcessId();
+    const uint32_t process_id = platform::current_process_id();
     for (int i = 0; i < MAX_SLAVES; i++)
     {
         uint32_t free_slot = 0;
@@ -311,7 +311,6 @@ sys_string get_mapping_name(const sys_string& key)
 
 SharedMemorySourceManager::SharedMemorySourceManager(const sys_string key, int clip_count, const VideoInfo vi_array[]) :
     _is_server(true),
-    _mapping_handle(NULL),
     header(NULL),
     key(key)
 {
@@ -326,7 +325,6 @@ SharedMemorySourceManager::SharedMemorySourceManager(const sys_string key, int c
 }
 SharedMemorySourceManager::SharedMemorySourceManager(const sys_string key) :
     _is_server(false),
-    _mapping_handle(NULL),
     header(NULL),
     key(key)
 {
@@ -343,24 +341,12 @@ SharedMemorySourceManager::~SharedMemorySourceManager()
         do
         {
             signal_shutdown();
-            Sleep(1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             bool has_alive_client = false;
             for (int i = 0; i < MAX_SLAVES; i++)
             {
-                DWORD client_process_id = header->client_process_ids[i];
-                if (!client_process_id)
-                {
-                    continue;
-                }
-                OwnedHandle process_handle(OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, client_process_id));
-                if (!process_handle.is_valid())
-                {
-                    continue;
-                }
-                DWORD exit_code = 0;
-                BOOL result = GetExitCodeProcess(process_handle.get(), &exit_code);
-                assert(result);
-                if (exit_code == STILL_ACTIVE)
+                const uint32_t client_process_id = header->client_process_ids[i];
+                if (client_process_id && platform::is_process_alive(client_process_id))
                 {
                     has_alive_client = true;
                     break;
@@ -373,7 +359,7 @@ SharedMemorySourceManager::~SharedMemorySourceManager()
             }
         } while (load_object_state(header).client_count > 0);
     } else {
-        DWORD process_id = GetCurrentProcessId();
+        const uint32_t process_id = platform::current_process_id();
         for (int i = 0; i < MAX_SLAVES; i++)
         {
             uint32_t own_slot = process_id;
@@ -383,8 +369,8 @@ SharedMemorySourceManager::~SharedMemorySourceManager()
             }
         }
     }
-    UnmapViewOfFile(header);
     header = NULL;
+    _mapping.close();
 }
 
 void SharedMemorySourceClientLockAcquire::do_lock(short increment)

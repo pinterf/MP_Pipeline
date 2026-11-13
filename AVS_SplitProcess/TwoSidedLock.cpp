@@ -1,43 +1,25 @@
-#define UNICODE
-#define _UNICODE
-
 #include "common.h"
 #include "TwoSidedLock.h"
 #include "ActivitySignal.h"
-#include <string>
-#include <stdexcept>
-#include <assert.h>
-#include <sstream>
-#include <stdio.h>
 
-using namespace std;
+#define LOCK_NAME_SUFFIX_SERVER SYSTEXT("_Server")
+#define LOCK_NAME_SUFFIX_CLIENT SYSTEXT("_Client")
 
-#ifdef UNICODE
-#define tstring wstring
-#else
-#define tstring string
-#endif
-
-#define LOCK_NAME_SUFFIX_SERVER TEXT("_Server")
-#define LOCK_NAME_SUFFIX_CLIENT TEXT("_Client")
-
-TwoSidedLock::TwoSidedLock(const SYSCHAR* lock_prefix, const SYSCHAR* lock_name,  bool is_server_side, ActivitySignal* activity) :
-    _event_this_side(NULL),
-    _event_other_side(NULL),
+TwoSidedLock::TwoSidedLock(const SYSCHAR* lock_prefix, const SYSCHAR* lock_name, bool is_server_side, ActivitySignal* activity) :
     _is_server_side(is_server_side),
     _activity(activity)
 {
-    SYSCHAR buffer[1024];
-    memset(buffer, 0, sizeof(buffer));
-    if (_sntprintf(buffer, ARRAYSIZE(buffer) - 1, TEXT("%s_%s"), lock_prefix, lock_name) < 0)
-    {
-        throw invalid_argument("lock_prefix and lock_name are too long.");
-    }
+    const sys_string name = sys_string(lock_prefix) + SYSTEXT("_") + lock_name;
+    const sys_string server_name = name + LOCK_NAME_SUFFIX_SERVER;
+    const sys_string client_name = name + LOCK_NAME_SUFFIX_CLIENT;
     if (is_server_side)
     {
-        create_server(buffer);
+        // the server's side starts signaled
+        _event_this_side.reset(new platform::NamedEvent(server_name, true, true, true));
+        _event_other_side.reset(new platform::NamedEvent(client_name, true, true, false));
     } else {
-        create_client(buffer);
+        _event_this_side.reset(new platform::NamedEvent(client_name, false, true, false));
+        _event_other_side.reset(new platform::NamedEvent(server_name, false, true, false));
     }
 }
 
@@ -51,84 +33,31 @@ void TwoSidedLock::signal_activity_if(bool server_side_event_set)
 
 void TwoSidedLock::switch_to_other_side()
 {
-    _event_other_side.set();
+    _event_other_side->set();
     signal_activity_if(!_is_server_side);
 }
 
 void TwoSidedLock::stay_on_this_side()
 {
-    _event_this_side.set();
+    _event_this_side->set();
     signal_activity_if(_is_server_side);
 }
 
-bool TwoSidedLock::wait_on_this_side(DWORD ms_timeout, BOOL apc_aware)
+bool TwoSidedLock::wait_on_this_side(unsigned ms_timeout)
 {
-    DWORD result = _event_this_side.wait(ms_timeout, apc_aware);
-    switch (result)
+    if (!_event_this_side->wait(ms_timeout))
     {
-    case WAIT_OBJECT_0:
-    case WAIT_IO_COMPLETION:
-        _event_this_side.reset();
-        return true;
-        break;
-    case WAIT_TIMEOUT:
         return false;
-        break;
-    default:
-        ostringstream error_msg;
-        error_msg << "Error when waiting on the event, return value: " << result << " error code: " << GetLastError();
-        throw runtime_error(error_msg.str());
     }
+    _event_this_side->reset();
+    return true;
 }
 
 void TwoSidedLock::signal_all()
 {
-    _event_this_side.set();
-    _event_other_side.set();
+    _event_this_side->set();
+    _event_other_side->set();
     signal_activity_if(true);
-}
-
-void check_event(OwnedEventHandle& handle)
-{
-    DWORD error_code = GetLastError();
-    if (!handle.is_valid())
-    {
-        assert(false);
-        throw runtime_error("Unable to create event.");
-    }
-    if (error_code == ERROR_ALREADY_EXISTS)
-    {
-        throw runtime_error("The event already exists.");
-    }
-}
-
-void TwoSidedLock::create_server(const SYSCHAR* lock_name)
-{
-    tstring event_name(lock_name);
-    event_name.append(LOCK_NAME_SUFFIX_SERVER);
-    _event_this_side.replace(CreateEvent(NULL, TRUE, TRUE, event_name.c_str()));
-    check_event(_event_this_side);
-    
-    event_name.assign(lock_name);
-    event_name.append(LOCK_NAME_SUFFIX_CLIENT);
-    _event_other_side.replace(CreateEvent(NULL, TRUE, FALSE, event_name.c_str()));
-    check_event(_event_other_side);
-}
-
-void TwoSidedLock::create_client(const SYSCHAR* lock_name)
-{
-    // don't know whether OpenEvent will reset the last error code, reset it here for safe
-    SetLastError(ERROR_SUCCESS);
-
-    tstring event_name(lock_name);
-    event_name.append(LOCK_NAME_SUFFIX_CLIENT);
-    _event_this_side.replace(OpenEvent(EVENT_ALL_ACCESS, FALSE, event_name.c_str()));
-    check_event(_event_this_side);
-    
-    event_name.assign(lock_name);
-    event_name.append(LOCK_NAME_SUFFIX_SERVER);
-    _event_other_side.replace(OpenEvent(EVENT_ALL_ACCESS, FALSE, event_name.c_str()));
-    check_event(_event_other_side);
 }
 
 TwoSidedLockContext::TwoSidedLockContext(TwoSidedLock& lock) :
@@ -144,5 +73,5 @@ TwoSidedLockContext::~TwoSidedLockContext()
 TwoSidedLockAcquire::TwoSidedLockAcquire(TwoSidedLock& lock) :
     TwoSidedLockContext(lock)
 {
-    _lock.wait_on_this_side(INFINITE);
+    _lock.wait_on_this_side(platform::WAIT_INFINITE);
 }

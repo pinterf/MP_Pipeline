@@ -325,9 +325,9 @@
     <ClInclude Include="FrameFetcher.h" />
     <ClInclude Include="FrameProps.h" />
     <ClInclude Include="ActivitySignal.h" />
-    <ClInclude Include="Handle.h" />
     <ClInclude Include="LocalEvent.h" />
     <ClInclude Include="NonCopyableClassBase.h" />
+    <ClInclude Include="platform.h" />
     <ClInclude Include="SafeEnv.h" />
     <ClInclude Include="SelectThunkEvery.h" />
     <ClInclude Include="SharedMemoryClient.h" />
@@ -363,6 +363,7 @@
     <ClCompile Include="slave_common.cpp" />
     <ClCompile Include="SpinLock.cpp" />
     <ClCompile Include="statement.cpp" />
+    <ClCompile Include="platform_win32.cpp" />
     <ClCompile Include="PropsChannel.cpp" />
     <ClCompile Include="ThunkedInterleave.cpp" />
     <ClCompile Include="TwoSidedLock.cpp" />

@@ -16,8 +16,8 @@ namespace {
 bool props_log_enabled()
 {
     static const bool enabled = [] {
-        char value[8] = { 0 };
-        return GetEnvironmentVariableA("MPP_TRACE_PROPS", value, sizeof(value)) > 0 && value[0] != '0';
+        const char* value = getenv("MPP_TRACE_PROPS");
+        return value && value[0] != 0 && value[0] != '0';
     }();
     return enabled;
 }
@@ -29,12 +29,16 @@ void props_log(const char* format, ...)
         return;
     }
     char buffer[512];
-    int len = _snprintf_s(buffer, sizeof(buffer), _TRUNCATE, "MPP_Props[%lu]: ", GetCurrentProcessId());
+    int len = snprintf(buffer, sizeof(buffer), "MPP_Props[%lu]: ", (unsigned long)platform::current_process_id());
+    if (len < 0 || len >= (int)sizeof(buffer))
+    {
+        len = 0;
+    }
     va_list args;
     va_start(args, format);
-    _vsnprintf_s(buffer + len, sizeof(buffer) - len, _TRUNCATE, format, args);
+    vsnprintf(buffer + len, sizeof(buffer) - len, format, args);
     va_end(args);
-    OutputDebugStringA(buffer);
+    platform::debug_output(buffer);
 }
 
 sys_string overflow_mapping_name(const sys_string& key, int clip_index, int slot, uint32_t gen)
@@ -65,7 +69,6 @@ PropsWriter::PropsWriter(const sys_string& key, int clip_index, int slot) :
     _key(key),
     _clip_index(clip_index),
     _slot(slot),
-    _mapping(NULL),
     _view(nullptr),
     _capacity(0),
     _gen(0),
@@ -77,10 +80,6 @@ PropsWriter::PropsWriter(const sys_string& key, int clip_index, int slot) :
 
 PropsWriter::~PropsWriter()
 {
-    if (_view)
-    {
-        UnmapViewOfFile(_view);
-    }
 }
 
 void PropsWriter::reallocate(size_t capacity, props_slot_state_t& state)
@@ -89,12 +88,8 @@ void PropsWriter::reallocate(size_t capacity, props_slot_state_t& state)
         _clip_index, _slot, (unsigned)_capacity, (unsigned)capacity, _gen + 1, (unsigned)_window_peak);
 
     // drop the old mapping; a client still having it open keeps it alive until it switches
-    if (_view)
-    {
-        UnmapViewOfFile(_view);
-        _view = nullptr;
-    }
-    _mapping.replace(NULL);
+    _mapping.close();
+    _view = nullptr;
     _capacity = 0;
     _gen++;
     _realloc_count++;
@@ -111,24 +106,18 @@ void PropsWriter::reallocate(size_t capacity, props_slot_state_t& state)
     }
 
     const sys_string name = overflow_mapping_name(_key, _clip_index, _slot, _gen);
-    const unsigned __int64 size64 = capacity;
-    _mapping.replace(CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE,
-        (DWORD)(size64 >> 32), (DWORD)(size64 & 0xFFFFFFFF), name.c_str()));
-    if (!_mapping.is_valid())
+    switch (_mapping.create(name, capacity))
     {
+    case platform::SharedMapping::OK:
+        break;
+    case platform::SharedMapping::ALREADY_EXISTS:
+        throw std::runtime_error("Frame property mapping already exists.");
+    case platform::SharedMapping::MAP_FAILED:
+        throw std::runtime_error("Unable to map frame property mapping (out of address space?).");
+    default:
         throw std::runtime_error("Unable to create frame property mapping (out of memory?).");
     }
-    if (GetLastError() == ERROR_ALREADY_EXISTS)
-    {
-        _mapping.replace(NULL);
-        throw std::runtime_error("Frame property mapping already exists.");
-    }
-    _view = (uint8_t*)MapViewOfFile(_mapping.get(), FILE_MAP_WRITE, 0, 0, 0);
-    if (!_view)
-    {
-        _mapping.replace(NULL);
-        throw std::runtime_error("Unable to map frame property mapping (out of address space?).");
-    }
+    _view = _mapping.data();
     _capacity = capacity;
     state.overflow_capacity = (uint32_t)capacity;
 }
@@ -200,7 +189,6 @@ PropsReader::PropsReader(const sys_string& key, int clip_index, int slot) :
     _key(key),
     _clip_index(clip_index),
     _slot(slot),
-    _mapping(NULL),
     _view(nullptr),
     _view_size(0),
     _gen(0)
@@ -214,13 +202,9 @@ PropsReader::~PropsReader()
 
 void PropsReader::release_view()
 {
-    if (_view)
-    {
-        UnmapViewOfFile(_view);
-        _view = nullptr;
-    }
+    _mapping.close();
+    _view = nullptr;
     _view_size = 0;
-    _mapping.replace(NULL);
 }
 
 void PropsReader::read(IScriptEnvironment* env, const FramePropsCaps& caps, PVideoFrame& frame,
@@ -266,17 +250,16 @@ void PropsReader::read(IScriptEnvironment* env, const FramePropsCaps& caps, PVid
         if (!_view)
         {
             const sys_string name = overflow_mapping_name(_key, _clip_index, _slot, _gen);
-            _mapping.replace(OpenFileMappingW(FILE_MAP_READ, FALSE, name.c_str()));
-            if (!_mapping.is_valid())
+            switch (_mapping.open(name, false))
             {
+            case platform::SharedMapping::OK:
+                break;
+            case platform::SharedMapping::MAP_FAILED:
+                throw std::runtime_error("Unable to map frame property mapping (out of address space?).");
+            default:
                 throw std::runtime_error("Unable to open frame property mapping.");
             }
-            _view = (const uint8_t*)MapViewOfFile(_mapping.get(), FILE_MAP_READ, 0, 0, 0);
-            if (!_view)
-            {
-                _mapping.replace(NULL);
-                throw std::runtime_error("Unable to map frame property mapping (out of address space?).");
-            }
+            _view = _mapping.data();
             _view_size = s.overflow_capacity;
             props_log("client clip %d slot %d: mapped overflow gen %u, %u bytes", _clip_index, _slot, _gen, (unsigned)_view_size);
         }

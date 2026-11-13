@@ -3,7 +3,6 @@
 #include "SharedMemoryServer.def.h"
 #include "FrameFetcher.h"
 #include "SharedMemoryCommon.h"
-#include "Handle.h"
 
 #include <atomic>
 #include <thread>

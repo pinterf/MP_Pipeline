@@ -21,7 +21,7 @@
 
 #include "avisynth.h"
 #include "FrameProps.h"
-#include "Handle.h"
+#include "platform.h"
 #include "NonCopyableClassBase.h"
 #include "SystemChar.h"
 #include <stdint.h>
@@ -66,7 +66,7 @@ private:
     int _clip_index;
     int _slot;
 
-    OwnedHandle _mapping;
+    platform::SharedMapping _mapping;
     uint8_t* _view;
     size_t _capacity;
     uint32_t _gen;
@@ -94,7 +94,7 @@ private:
     int _clip_index;
     int _slot;
 
-    OwnedHandle _mapping;
+    platform::SharedMapping _mapping;
     const uint8_t* _view;
     size_t _view_size;
     uint32_t _gen;
