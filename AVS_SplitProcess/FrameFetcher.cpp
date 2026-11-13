@@ -157,7 +157,7 @@ void FrameFetcher::fetch_frame(ClipInfo& clip, int n)
     while (fetch_start <= n)
     {
 #ifdef _DEBUG
-        __int64 start_time = us_time();
+        int64_t start_time = us_time();
 #endif
         PVideoFrame frame = try_get_frame(clip, fetch_start);
         if (!frame)

@@ -1,7 +1,12 @@
 #pragma once
 
-#include <Windows.h>
+#include <ctype.h>
+#include <memory>
+#include <string>
+#include <string.h>
+
 #include "avisynth.h"
+#include "platform.h"
 #include "utils.h"
 
 static const int MAX_SLAVES = 255;
@@ -32,12 +37,25 @@ static const int MAX_EXPORTED_CLIPS = 8;
 
 #endif
 
-static void append_platform_if_needed(TCHAR* path, const char* platform) 
+// The file name suffix of a platform's files next to the plugin: ".win32" / ".win64" for the other
+// bitness (MP_Pipeline.dll.win32, MP_Pipeline.dll.win32.slave.exe), empty for the current platform.
+inline std::string platform_file_suffix(const char* platform)
 {
-    if (strlen(platform) > 0 && _stricmp(platform, CURRENT_PLATFORM) != 0)
+    if (!platform || !platform[0])
     {
-        tprintf_append(path, TEXT(".%hs"), platform);
+        return std::string();
     }
+    const char* current = CURRENT_PLATFORM;
+    size_t i = 0;
+    while (platform[i] && current[i] && tolower((unsigned char)platform[i]) == tolower((unsigned char)current[i]))
+    {
+        i++;
+    }
+    if (!platform[i] && !current[i])
+    {
+        return std::string(); // the current platform (case-insensitive)
+    }
+    return std::string(".") + platform;
 }
 
 typedef struct _slave_create_params
@@ -46,7 +64,8 @@ typedef struct _slave_create_params
     char* script;
     const wchar_t* script_name_vars; // SCRIPT_NAME_VARS_VAR_NAME_W content, NULL: none
     char slave_platform[MAX_PLATFORM_LENGTH + 1];
-    HANDLE slave_job_object;
+    platform::ChildProcessGroup* slave_group;
 } slave_create_params;
 
-void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new_slave_port, HANDLE* slave_stdin_handle);
+// starts a slave process for the script; slave_input: its stdin, the slave runs while it is kept
+void create_slave(IScriptEnvironment* env, slave_create_params* params, int* new_slave_port, std::unique_ptr<platform::ChildInput>& slave_input);

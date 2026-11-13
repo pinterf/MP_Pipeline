@@ -4,6 +4,9 @@
 #include "GenericVideoFilter2.h"
 #include "slave_common.h"
 
+#include <memory>
+#include <vector>
+
 static const char* SCRIPT_SPLITTER_PATTERN = "^(\\s*### ###\\s*)$";
 
 
@@ -20,9 +23,10 @@ private:
     void create_pipeline_finish(char* script, IScriptEnvironment* env);
 
     void prepare_slave(slave_create_params* params, IScriptEnvironment* env);
-    void close_slave_stdin_handles();
 
     char _instance_id[100];
-    HANDLE _slave_stdin_handles[MAX_SLAVES + 1];
-    HANDLE _slave_job;
+    // the slave processes; destroyed (killed) on failure, released at a normal end
+    std::unique_ptr<platform::ChildProcessGroup> _slaves;
+    // the slaves' stdin: they run while these are kept, closing them tells the slaves to exit
+    std::vector<std::unique_ptr<platform::ChildInput> > _slave_inputs;
 };

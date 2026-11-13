@@ -3,10 +3,10 @@
 // The operating system services MP_Pipeline uses, behind a portable interface.
 // Implementation: platform_win32.cpp (Windows XP and later). A POSIX implementation is planned,
 // see LINUX_PORT_PLAN.md. No Windows header here: the rest of the code calls only these.
-//
-// Not here yet: the slave process (start, pipes, environment, lifetime), which is the next part.
+
 
 #include <stdint.h>
+#include <memory>
 #include <string>
 
 #include "NonCopyableClassBase.h"
@@ -39,6 +39,82 @@ std::string new_unique_id();
 
 // a line for the debugger / DebugView (OutputDebugString on Windows)
 void debug_output(const char* text);
+
+// --- files, modules, environment ---------------------------------------------------------------
+
+// full path of the module (the plugin DLL or the executable) containing this code; empty on failure
+sys_string module_path();
+
+bool file_exists(const sys_string& path);
+
+// Sets a variable in the environment of this process (value NULL: removes it); the child
+// processes started afterwards inherit it. The narrow version uses the process' ANSI code page
+// (Windows), the wide one is exact.
+bool set_environment_variable(const char* name, const char* value);
+bool set_environment_variable(const SYSCHAR* name, const SYSCHAR* value);
+
+// --- child processes (the slaves) --------------------------------------------------------------
+
+// The slave processes of one MP_Pipeline instance. When the master process ends unexpectedly
+// (crash, killed), the processes of the group are killed (Windows: a job object with
+// kill-on-close). At a normal end they may finish on their own: set_kill_on_destroy(false).
+class ChildProcessGroup : private NonCopyableClassBase
+{
+public:
+    // throws std::runtime_error
+    ChildProcessGroup();
+    // kills the processes of the group, unless set_kill_on_destroy(false) was called
+    ~ChildProcessGroup();
+
+    void set_kill_on_destroy(bool kill);
+
+private:
+    friend class ChildProcess;
+    void* _job;
+    bool _kill_on_destroy;
+};
+
+// The write end of a child's stdin. The slave runs while it is open; closing it (destroying
+// this object) tells the slave to exit.
+class ChildInput : private NonCopyableClassBase
+{
+public:
+    ~ChildInput();
+
+private:
+    friend class ChildProcess;
+    explicit ChildInput(void* handle) : _handle(handle) {}
+    void* _handle;
+};
+
+// A child process started with its stdin from a pipe and its stdout + stderr into another pipe.
+// Destroying it closes the process handle and the pipes that were not handed over: the child
+// sees the end of its stdin.
+class ChildProcess : private NonCopyableClassBase
+{
+public:
+    ChildProcess();
+    ~ChildProcess();
+
+    // Starts the executable in the group (if the system does not allow that, outside it: then
+    // it is not killed with the master). The child inherits this process' environment.
+    // false: error_message tells why.
+    bool start(const sys_string& executable, ChildProcessGroup& group, std::string& error_message);
+
+    // reads the child's output (stdout + stderr); 0: the output was closed (the child exited)
+    size_t read_output(char* buffer, size_t size);
+
+    // true and the exit code when the child exits within the timeout
+    bool wait_for_exit(unsigned ms_timeout, uint32_t& exit_code);
+
+    // hands over the stdin pipe, see ChildInput; null when already handed over
+    std::unique_ptr<ChildInput> take_input();
+
+private:
+    void* _process;
+    void* _input_write;
+    void* _output_read;
+};
 
 // --- named events (between processes) ----------------------------------------------------------
 

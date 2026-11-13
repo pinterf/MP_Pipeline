@@ -1,23 +1,13 @@
 #pragma once
 
 #include <assert.h>
+#include <stdint.h>
 #include "avisynth.h"
 
 int sprintf_append(char* buffer, const char* format, ...);
-int wsprintf_append(wchar_t* buffer, const wchar_t* format, ...);
 
-bool get_self_path_a(char* buffer, DWORD buffer_size);
-bool get_self_path_w(wchar_t* buffer, DWORD buffer_size);
-
-__int64 us_time();
-
-#ifdef UNICODE
-#define tprintf_append wsprintf_append
-#define get_self_path get_self_path_w
-#else
-#define tprintf_append sprintf_append
-#define get_self_path get_self_path_a
-#endif
+// microseconds of a monotonic clock, for measuring durations
+int64_t us_time();
 
 
 #ifdef _M_X64

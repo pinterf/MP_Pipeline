@@ -16,7 +16,7 @@ void CondVar::lock_short()
 {
     static const int SPIN_COUNT = SPIN_LOCK_UNIT * 5 < 2000 ? 2000 : SPIN_LOCK_UNIT * 5;
 #if _DEBUG
-    __int64 enter_time = us_time();
+    int64_t enter_time = us_time();
 #endif
     while (true)
     {

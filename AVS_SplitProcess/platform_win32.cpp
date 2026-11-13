@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
 namespace platform {
 
@@ -71,6 +72,234 @@ std::string new_unique_id()
 void debug_output(const char* text)
 {
     OutputDebugStringA(text);
+}
+
+// --- files, modules, environment ---------------------------------------------------------------
+
+sys_string module_path()
+{
+    HMODULE module = NULL;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        (LPCWSTR)&module_path, &module))
+    {
+        return sys_string();
+    }
+    std::vector<wchar_t> buffer(MAX_PATH);
+    while (true)
+    {
+        const DWORD len = GetModuleFileNameW(module, &buffer[0], (DWORD)buffer.size());
+        if (len == 0)
+        {
+            return sys_string();
+        }
+        if (len < buffer.size())
+        {
+            return sys_string(&buffer[0], len);
+        }
+        // truncated (XP does not report it with an error): try a larger buffer
+        if (buffer.size() >= 32768)
+        {
+            return sys_string();
+        }
+        buffer.resize(buffer.size() * 2);
+    }
+}
+
+bool file_exists(const sys_string& path)
+{
+    return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+bool set_environment_variable(const char* name, const char* value)
+{
+    return SetEnvironmentVariableA(name, value) != 0;
+}
+
+bool set_environment_variable(const SYSCHAR* name, const SYSCHAR* value)
+{
+    return SetEnvironmentVariableW(name, value) != 0;
+}
+
+// --- child processes ---------------------------------------------------------------------------
+
+static std::string error_text(const char* call, DWORD code)
+{
+    std::ostringstream ss;
+    ss << call << " failed, code = " << code;
+    return ss.str();
+}
+
+static void close_handle(void*& handle)
+{
+    if (handle)
+    {
+        CloseHandle((HANDLE)handle);
+        handle = NULL;
+    }
+}
+
+ChildProcessGroup::ChildProcessGroup() : _job(NULL), _kill_on_destroy(true)
+{
+    HANDLE job = CreateJobObjectW(NULL, NULL);
+    if (!job)
+    {
+        throw std::runtime_error(error_text("CreateJobObject", GetLastError()));
+    }
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit_info;
+    memset(&limit_info, 0, sizeof(limit_info));
+    limit_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
+    if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limit_info, sizeof(limit_info)))
+    {
+        const DWORD code = GetLastError();
+        CloseHandle(job);
+        throw std::runtime_error(error_text("SetInformationJobObject", code));
+    }
+    _job = job;
+}
+
+ChildProcessGroup::~ChildProcessGroup()
+{
+    if (!_kill_on_destroy)
+    {
+        // a normal end: lift kill-on-close, so the slaves can clean up and terminate themselves
+        // and the master does not need to wait for them
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit_info;
+        memset(&limit_info, 0, sizeof(limit_info));
+        SetInformationJobObject((HANDLE)_job, JobObjectExtendedLimitInformation, &limit_info, sizeof(limit_info));
+    }
+    // with kill-on-close still set, closing the last handle of the job kills its processes
+    close_handle(_job);
+}
+
+void ChildProcessGroup::set_kill_on_destroy(bool kill)
+{
+    _kill_on_destroy = kill;
+}
+
+ChildInput::~ChildInput()
+{
+    close_handle(_handle);
+}
+
+ChildProcess::ChildProcess() : _process(NULL), _input_write(NULL), _output_read(NULL)
+{
+}
+
+ChildProcess::~ChildProcess()
+{
+    close_handle(_process);
+    close_handle(_input_write);
+    close_handle(_output_read);
+}
+
+bool ChildProcess::start(const sys_string& executable, ChildProcessGroup& group, std::string& error_message)
+{
+    HANDLE input_read = NULL, input_write = NULL, output_read = NULL, output_write = NULL;
+    // the child's ends of the pipes are inherited, ours are not
+    SECURITY_ATTRIBUTES pipe_attrs;
+    memset(&pipe_attrs, 0, sizeof(pipe_attrs));
+    pipe_attrs.nLength = sizeof(pipe_attrs);
+    pipe_attrs.bInheritHandle = TRUE;
+    auto close_child_ends = [&] {
+        if (input_read) CloseHandle(input_read);
+        if (output_write) CloseHandle(output_write);
+        input_read = output_write = NULL;
+    };
+    if (!CreatePipe(&input_read, &input_write, &pipe_attrs, 0))
+    {
+        error_message = error_text("CreatePipe", GetLastError());
+        return false;
+    }
+    _input_write = input_write;
+    if (!SetHandleInformation(input_write, HANDLE_FLAG_INHERIT, 0))
+    {
+        error_message = error_text("SetHandleInformation", GetLastError());
+        close_child_ends();
+        return false;
+    }
+    if (!CreatePipe(&output_read, &output_write, &pipe_attrs, 0))
+    {
+        error_message = error_text("CreatePipe", GetLastError());
+        close_child_ends();
+        return false;
+    }
+    _output_read = output_read;
+    if (!SetHandleInformation(output_read, HANDLE_FLAG_INHERIT, 0))
+    {
+        error_message = error_text("SetHandleInformation", GetLastError());
+        close_child_ends();
+        return false;
+    }
+
+    STARTUPINFOW si;
+    PROCESS_INFORMATION pi;
+    memset(&si, 0, sizeof(si));
+    memset(&pi, 0, sizeof(pi));
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.hStdInput = input_read;
+    si.hStdError = output_write;
+    si.hStdOutput = output_write;
+    si.wShowWindow = SW_HIDE;
+    // CREATE_BREAKAWAY_FROM_JOB: the master itself may be in a job (placed there by Windows or
+    // the host); without the flag the child would be in that job too, and assigning it to the
+    // group's job would fail
+    BOOL created = CreateProcessW(executable.c_str(), NULL, NULL, NULL, TRUE,
+        CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB, NULL, NULL, &si, &pi);
+    if (!created && GetLastError() == ERROR_ACCESS_DENIED)
+    {
+        // the master's job does not allow breaking away (no JOB_OBJECT_LIMIT_BREAKAWAY_OK)
+        created = CreateProcessW(executable.c_str(), NULL, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
+    }
+    const DWORD create_error = GetLastError();
+    close_child_ends();
+    if (!created)
+    {
+        error_message = error_text("CreateProcess", create_error);
+        return false;
+    }
+    CloseHandle(pi.hThread);
+    _process = pi.hProcess;
+    // a failure is no error: the slave is just not killed when the master ends unexpectedly
+    AssignProcessToJobObject((HANDLE)group._job, pi.hProcess);
+    return true;
+}
+
+size_t ChildProcess::read_output(char* buffer, size_t size)
+{
+    DWORD bytes_read = 0;
+    if (!_output_read || size == 0 || !ReadFile((HANDLE)_output_read, buffer, (DWORD)size, &bytes_read, NULL))
+    {
+        return 0;
+    }
+    return bytes_read;
+}
+
+bool ChildProcess::wait_for_exit(unsigned ms_timeout, uint32_t& exit_code)
+{
+    if (!_process)
+    {
+        return false;
+    }
+    WaitForSingleObject((HANDLE)_process, ms_timeout == WAIT_INFINITE ? INFINITE : (DWORD)ms_timeout);
+    DWORD code = 0;
+    if (!GetExitCodeProcess((HANDLE)_process, &code) || code == STILL_ACTIVE)
+    {
+        return false;
+    }
+    exit_code = code;
+    return true;
+}
+
+std::unique_ptr<ChildInput> ChildProcess::take_input()
+{
+    if (!_input_write)
+    {
+        return std::unique_ptr<ChildInput>();
+    }
+    std::unique_ptr<ChildInput> input(new ChildInput(_input_write));
+    _input_write = NULL;
+    return input;
 }
 
 // --- named events ------------------------------------------------------------------------------

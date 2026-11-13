@@ -15,6 +15,7 @@
 #include <algorithm>
 
 #include "platform.h"
+#include "splitprocess.h"
 
 #define BRANCH_STATEMENT_START "^\\s*### branch:"
 #define BRANCH_STATEMENT_PARAM "\\s*(\\d+)(?:\\s*,\\s*(\\d{1,7}))?\\s*$"
@@ -67,65 +68,39 @@ MP_Pipeline::MP_Pipeline(const MP_Pipeline_parameter_storage_t& o, IScriptEnviro
     }
     strncpy(_instance_id, instance_id.c_str(), sizeof(_instance_id) - 1);
 
-    memset(&_slave_stdin_handles, 0, sizeof(_slave_stdin_handles));
-
-    // the job object is used to make the system kill all slave processes if the main process is unexpectedly terminated
-    _slave_job = CreateJobObject(NULL, NULL);
-    if (!_slave_job)
+    // the system kills the slave processes when the master process ends unexpectedly
+    try
     {
-        env->ThrowError("MP_Pipeline: Unable to create job object, code = %d", GetLastError());
-    }
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit_info;
-    memset(&limit_info, 0, sizeof(limit_info));
-    limit_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
-    if (!SetInformationJobObject(_slave_job, JobObjectExtendedLimitInformation, &limit_info, sizeof(limit_info)))
-    {
-        env->ThrowError("MP_Pipeline: SetInformationJobObject failed, code = %d", GetLastError());
+        _slaves.reset(new platform::ChildProcessGroup());
+    } catch (const std::exception& e) {
+        env->ThrowError("MP_Pipeline: Unable to create the slave process group: %s", e.what());
     }
     this->create_pipeline(env);
 }
 
-void MP_Pipeline::close_slave_stdin_handles()
-{
-    for (int i = 0; i < MAX_SLAVES; i++)
-    {
-        if (!_slave_stdin_handles[i])
-        {
-            break;
-        }
-        CloseHandle(_slave_stdin_handles[i]);
-        _slave_stdin_handles[i] = NULL;
-    }
-}
-
 MP_Pipeline::~MP_Pipeline()
 {
-    close_slave_stdin_handles();
-    if (_slave_job)
+    // closing their stdin tells the slaves to exit
+    _slave_inputs.clear();
+    if (_slaves)
     {
-
-        if (!_always_kill_children) {
-            // since we are exiting normally, reset the job limitation to default,
-            // so that the slave processes can clean up and terminate themselves,
-            // and the main process don't need to wait for them
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit_info;
-            memset(&limit_info, 0, sizeof(limit_info));
-            SetInformationJobObject(_slave_job, JobObjectExtendedLimitInformation, &limit_info, sizeof(limit_info));
-        }
-        CloseHandle(_slave_job);
-        _slave_job = NULL;
+        // a normal end: the slaves clean up and terminate themselves, the master does not wait
+        // for them (unless always_kill_children)
+        _slaves->set_kill_on_destroy(_always_kill_children);
+        _slaves.reset();
     }
 }
 
 void add_load_plugin_function(char* script, const char* platform, IScriptEnvironment* env)
 {
-    char self_path[32768];
-    if (!get_self_path(self_path, ARRAYSIZE(self_path) - 32))
+    // the script is ANSI text (as the paths AviSynth gets from a script)
+    const sys_string module_path = platform::module_path();
+    if (module_path.empty())
     {
-        env->ThrowError("get_self_path failed, code = %d", GetLastError());
+        env->ThrowError("MP_Pipeline: Unable to get the path of the plugin.");
     }
-    append_platform_if_needed(self_path, platform);
-    sprintf_append(script, "function %s() {\n LoadPlugin(\"%s\")\n }\n", LOAD_PLUGIN_FUNCTION_NAME, self_path);
+    const std::string self_path = WideToMultiByte(module_path, ansi_code_page()) + platform_file_suffix(platform);
+    sprintf_append(script, "function %s() {\n LoadPlugin(\"%s\")\n }\n", LOAD_PLUGIN_FUNCTION_NAME, self_path.c_str());
 }
 
 bool process_clip_list_statement(const char* statement_start, const char* statement_full, const char* script, function<void (const char*)> callback)
@@ -248,7 +223,7 @@ void check_single_platform(const char* script, int block_number, IScriptEnvironm
 
 void MP_Pipeline::prepare_slave(slave_create_params* params, IScriptEnvironment* env)
 {
-    params->slave_job_object = _slave_job;
+    params->slave_group = _slaves.get();
     scan_statement(params->script, PLATFORM_PATTERN, NULL, PLATFORM_SCAN_FORMAT, params->slave_platform);
 
     sprintf_append(params->script, "MPP_SharedMemoryServer(\"%s\", %s()", _instance_id, GET_OUTPUT_PORT_FUNCTION_NAME);
@@ -445,7 +420,9 @@ void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_coun
             prepare_slave(&params, env);
 
             int port = -1;
-            create_slave(env, &params, &port, _slave_stdin_handles + *slave_count);
+            std::unique_ptr<platform::ChildInput> slave_input;
+            create_slave(env, &params, &port, slave_input);
+            _slave_inputs.push_back(std::move(slave_input));
 
             sprintf_append(next_script, "%s" CLIENT_TEMPLATE, i == 0 ? "" : ", ", _instance_id, port);
 
@@ -489,9 +466,8 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
     {
         if (!completed) {
             // Some error happened, terminate all slave processes
-            CloseHandle(_slave_job);
-            _slave_job = NULL;
-            close_slave_stdin_handles();
+            _slaves.reset();
+            _slave_inputs.clear();
         }
         free(buffer_store);
         free(script_dup);
@@ -557,7 +533,9 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
                 params.script = current_script_part;
                 prepare_slave(&params, env);
 
-                create_slave(env, &params, &port, _slave_stdin_handles + slave_count);
+                std::unique_ptr<platform::ChildInput> slave_input;
+                create_slave(env, &params, &port, slave_input);
+                _slave_inputs.push_back(std::move(slave_input));
 				
 			int mt_mode, mt_threads;
 			bool mt_mode_b = false;
