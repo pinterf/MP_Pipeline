@@ -23,7 +23,8 @@ typed properties are skipped. "### frame props: off" in a block switches it off 
 frames leaving that block.
 See Documentation/MP_Pipeline_readme_avsplus.avs and MP_Pipeline_frameprops_demo.avs.
 
-Tests: tests/Pipeline/run_tests.ps1 (AVSMeter based pipeline tests) and
+Tests: tests/Pipeline/run_tests.ps1 (AVSMeter based pipeline tests), on Linux
+tests/Pipeline/run_tests.sh (with the avs_run test host, cmake -DMPP_BUILD_TESTS=ON), and
 tests/FrameProps (serializer unit test), see the comments in the files.
 
 Build:
@@ -37,6 +38,13 @@ Build:
 - Windows on ARM64: build_arm64_mingw.bat, cross-compiled on x64 Windows with llvm-mingw
   (https://github.com/mstorsjo/llvm-mingw, UCRT flavour; set LLVM_MINGW_ROOT), CMake and Ninja.
   Output: out\ARM64\llvm-mingw. The toolchain file is cmake/toolchains/llvm-mingw-aarch64.cmake.
+- Linux (GCC, Clang): the same CMakeLists.txt
+    cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+    cmake --build build && sudo cmake --install build
+  Output: libmp_pipeline.so and libmp_pipeline.so.slave, installed together into lib/avisynth (the
+  slave must be next to the plugin). No "### platform:" on Linux (an error), "### dll:" takes a
+  libavisynth.so path. Tested on Ubuntu 26.04 (GCC 15, Clang 21, AviSynth+ 3.7.6) and Ubuntu 22.04
+  (GCC 13, AviSynth+ 3.7.5).
 A plugin folder needs the other bitness pair too: MP_Pipeline.dll.win32 / .win64 and its
 .slave.exe (the Visual Studio build copies them to the other platform's Output folder).
 
@@ -88,6 +96,13 @@ Change log:
   schedules the threads (pinning rather hurt with today's schedulers, hybrid and many-core CPUs).
   The fetcher_thread_lock_to_cpu / server_thread_lock_to_cpu parameters of MPP_SharedMemoryServer
   are ignored as well.
+* Linux support (x86-64, GCC and Clang, AviSynth+ 3.7.5 and 3.7.6): the platform layer has a POSIX implementation
+  (shared memory with shm_open, process-shared robust pthread events, posix_spawn, the slave ends with
+  the master); libmp_pipeline.so with libmp_pipeline.so.slave next to it. "### platform:" is Windows
+  only. Tests: tests/Pipeline/run_tests.sh with the avs_run test host.
+* Statements are matched line by line with std::regex::multiline where the C++ library has it: the
+  newer MSVC (v145), libstdc++ and libc++ match ^ and $ only at the start and end of the whole text
+  without it (statements were not found there; the v141 / v143 builds were not affected).
 * Build: CMake build for MinGW (GCC, Clang) and llvm-mingw; Windows on ARM64 build (build_arm64_mingw.bat,
   cross-compiled with llvm-mingw, for the llvm-mingw built ARM64 AviSynth+). A MinGW build needs a MinGW
   built AviSynth+ in its process (the C++ exceptions of the AviSynth interface differ between MSVC and
