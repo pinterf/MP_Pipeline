@@ -58,7 +58,7 @@ AVSValue __cdecl Create_SharedMemoryServer(AVSValue args, void* user_data, IScri
 
 bool SharedMemoryServer::is_shutting_down() const
 {
-    return _shutdown || _manager.header->object_state.shutdown;
+    return _shutdown || load_object_state(_manager.header).shutdown;
 }
 
 unsigned __stdcall SharedMemoryServer::thread_stub(void* self)
@@ -76,7 +76,7 @@ void SharedMemoryServer::process_get_parity(const shared_memory_source_request_t
     TwoSidedLockContext ctx(*_manager.parity_signal);
 
     int response_index = get_response_index(request.frame_number);
-    volatile parity_response_t& result_reference = _manager.header->clips[request.clip_index].parity_response[response_index];
+    std::atomic<int64_t>& result_reference = _manager.header->clips[request.clip_index].parity_response[response_index];
     parity_response_t result;
 
     char parity = 0;
@@ -87,13 +87,14 @@ void SharedMemoryServer::process_get_parity(const shared_memory_source_request_t
         {
             return;
         }
-        result.value = _InterlockedCompareExchange64(&result_reference.value, 0, 0);
+        result.value = result_reference.load();
         if (result.frame_number == request.frame_number && (result.parity & 0x80) != 0)
         {
             auto new_result = result;
             new_result.sequence_number++;
             new_result.requested_client_count++;
-            if (_InterlockedCompareExchange64(&result_reference.value, new_result.value, result.value) == result.value)
+            int64_t expected = result.value;
+            if (result_reference.compare_exchange_strong(expected, new_result.value))
             {
                 return;
             } else {
@@ -119,7 +120,8 @@ void SharedMemoryServer::process_get_parity(const shared_memory_source_request_t
         new_result.frame_number = request.frame_number;
         new_result.requested_client_count++;
         new_result.parity = parity;
-        if (_InterlockedCompareExchange64(&result_reference.value, new_result.value, result.value) == result.value)
+        int64_t expected = result.value;
+        if (result_reference.compare_exchange_strong(expected, new_result.value))
         {
             return;
         } else {
@@ -129,7 +131,7 @@ void SharedMemoryServer::process_get_parity(const shared_memory_source_request_t
     }
 }
 
-bool can_prefetch(const volatile frame_response_t& response)
+bool can_prefetch(const frame_response_t& response)
 {
     return response.requested_client_count == 0 && (!response.is_prefetch || response.prefetch_hit > 0);
 }
@@ -163,7 +165,7 @@ bool SharedMemoryServer::try_prefetch_frame()
             // not sure whether the client is requesting linearly, don't prefetch now
             continue;
         }
-        volatile auto& resp = clip.frame_response[resp_index];
+        auto& resp = clip.frame_response[resp_index];
         if (resp.is_prefetch && resp.prefetch_hit > 0)
         {
             // tell the fetcher to continue prefetching
@@ -242,7 +244,7 @@ void SharedMemoryServer::process_get_frame(const shared_memory_source_request_t&
     if (response.frame_number == request.frame_number)
     {
         TRACE("(Clip %d) process_get_frame: %d (Already in response)", request.clip_index, request.frame_number);
-        _InterlockedIncrement(&response.requested_client_count);
+        response.requested_client_count++;
         cond.signal.switch_to_other_side();
         return;
     }
@@ -268,10 +270,10 @@ void SharedMemoryServer::process_get_frame(const shared_memory_source_request_t&
             {
                 if (response.is_prefetch)
                 {
-                    TRACE("(Clip %d) Replacing prefetched frame %d (hit: %d) with frame %d", request.clip_index, response.frame_number, response.prefetch_hit, request.frame_number);
+                    TRACE("(Clip %d) Replacing prefetched frame %d (hit: %d) with frame %d", request.clip_index, response.frame_number.load(), response.prefetch_hit.load(), request.frame_number);
                 }
                 response.frame_number = request.frame_number;
-                // note: use Interlocked functions if need to change client count in other place!
+                // the client count is atomic, the client decrements it
                 response.requested_client_count = 1;
                 response.is_prefetch = false;
                 response.prefetch_hit = 0;
@@ -307,11 +309,15 @@ unsigned SharedMemoryServer::thread_proc()
                 break;
             }
             cvla.signal_after_unlock = true;
-            if (_manager.header->request.request_type != REQ_EMPTY)
+            auto& slot = _manager.header->request;
+            if (slot.request_type != REQ_EMPTY)
             {
-                memcpy(&request, (const void*)&(_manager.header->request), sizeof(request));
-                _manager.header->request.request_type = REQ_EMPTY; 
-                _manager.header->request.sequence_number++;
+                request.request_type = (request_type_t)slot.request_type.load();
+                request.clip_index = slot.clip_index;
+                request.frame_number = slot.frame_number;
+                request.sequence_number = slot.sequence_number;
+                slot.request_type = REQ_EMPTY;
+                slot.sequence_number++;
             }
         }
 

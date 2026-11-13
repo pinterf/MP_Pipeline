@@ -77,7 +77,7 @@ SharedMemoryClient::~SharedMemoryClient()
 
 bool SharedMemoryClient::is_shutting_down()
 {
-    return _manager.header->object_state.shutdown || _shutdown;
+    return load_object_state(_manager.header).shutdown || _shutdown;
 }
 
 void SharedMemoryClient::check_shutting_down(IScriptEnvironment* env)
@@ -122,9 +122,9 @@ PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
 {
     SharedMemorySourceClientLockAcquire lock(_manager);
     check_shutting_down(env);
-    volatile auto& request = _manager.header->request;
+    auto& request = _manager.header->request;
     int response_index = get_response_index(n);
-    volatile auto& resp = _manager.header->clips[_clip_index].frame_response[response_index];
+    auto& resp = _manager.header->clips[_clip_index].frame_response[response_index];
     CondVar& cond = *_manager.sync_groups[_clip_index]->response_conds[response_index];
     PVideoFrame frame = NULL;
     std::string props_error;
@@ -206,7 +206,7 @@ PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
                 }
                 if (server_got_our_request)
                 {
-                    _InterlockedDecrement(&resp.requested_client_count);
+                    resp.requested_client_count--;
                 } else {
                     // since server doesn't get our request, 
                     // we must NOT decrease the count
@@ -227,8 +227,8 @@ PVideoFrame SharedMemoryClient::GetFrame(int n, IScriptEnvironment* env)
 bool SharedMemoryClient::GetParity(int n)
 {
     SharedMemorySourceClientLockAcquire lock(_manager);
-    volatile auto& request = _manager.header->request;
-    volatile parity_response_t& result_reference = _manager.header->clips[_clip_index].parity_response[get_response_index(n)];
+    auto& request = _manager.header->request;
+    std::atomic<int64_t>& result_reference = _manager.header->clips[_clip_index].parity_response[get_response_index(n)];
     while (true)
     {
         {
@@ -258,7 +258,7 @@ bool SharedMemoryClient::GetParity(int n)
             _manager.request_cond->signal.signal_all();
             return false;
         }
-        result.value = _InterlockedCompareExchange64(&result_reference.value, 0, 0);
+        result.value = result_reference.load();
         if (result.frame_number != n || (result.parity & 0x80) == 0)
         {
             _manager.parity_signal->wait_on_this_side(INFINITE);
@@ -271,7 +271,10 @@ bool SharedMemoryClient::GetParity(int n)
             auto new_result = result;
             new_result.sequence_number++;
             new_result.requested_client_count--;
-            result.value = _InterlockedCompareExchange64(&result_reference.value, new_result.value, old_value);
+            int64_t observed = old_value;
+            result_reference.compare_exchange_strong(observed, new_result.value);
+            // the value before the exchange: old_value on success, the current one otherwise
+            result.value = observed;
             assert(result.frame_number == n);
             assert((result.parity & 0x80) != 0);
             if (result.value == old_value)

@@ -6,7 +6,7 @@
 #include "utils.h"
 #include <assert.h>
 
-CondVar::CondVar(volatile spin_lock_value_type_t* lock_ptr, const sys_string& event_name, bool is_server) :
+CondVar::CondVar(spin_lock_t* lock_ptr, const sys_string& event_name, bool is_server) :
     lock(lock_ptr),
     signal(event_name.c_str(), SYSTEXT("Cond"), is_server)
 {

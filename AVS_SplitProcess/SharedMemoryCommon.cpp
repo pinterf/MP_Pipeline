@@ -109,74 +109,74 @@ void check_guard_bytes(unsigned char* address, DWORD buffer_size)
 #endif
 }
 
+// Fills the immutable part of a clip info (layout of its buffers in the mapping), from
+// mapping_size on; returns the mapping size after the clip's buffers.
+static DWORD compute_clip_layout(shared_memory_clip_info_t& info, const VideoInfo& vi, DWORD mapping_size)
+{
+    info.vi = vi;
+    DWORD clip_buffer_size = aligned(info.vi.RowSize()) * info.vi.height;
+    info.frame_pitch = aligned(info.vi.RowSize(), FRAME_ALIGN);
+
+    int planes[4];
+    const int plane_count = get_transfer_planes(info.vi, planes);
+    // planes after the first one: [U, V] or [B, R], then A (YA: only A)
+    for (int p = 1; p < plane_count; p++)
+    {
+      const int plane = planes[p];
+      const int row_size = info.vi.RowSize(plane);
+      const int height = (plane == PLANAR_U || plane == PLANAR_V)
+        ? info.vi.height >> info.vi.GetPlaneHeightSubsampling(plane)
+        : info.vi.height;
+      const int pitch = aligned(row_size, FRAME_ALIGN);
+      if (plane == PLANAR_A)
+      {
+        info.frame_pitch_a = pitch;
+        info.frame_offset_a = clip_buffer_size;
+      } else {
+        info.frame_pitch_uv = pitch;
+        if (plane == PLANAR_U || plane == PLANAR_B)
+          info.frame_offset_u = clip_buffer_size;
+        else
+          info.frame_offset_v = clip_buffer_size;
+      }
+      clip_buffer_size += pitch * height;
+    }
+    info.frame_buffer_size = clip_buffer_size;
+
+    // add some extra space before and after the buffer for guard bytes
+    info.frame_buffer_offset[0] = mapping_size + CACHE_LINE_SIZE * 2;
+    mapping_size = aligned(mapping_size + clip_buffer_size + 2048);
+
+    info.frame_buffer_offset[1] = mapping_size + CACHE_LINE_SIZE * 2;
+    mapping_size = aligned(mapping_size + clip_buffer_size + 2048);
+
+    // inline frame property areas, with the same guard byte spacing
+    for (int i = 0; i < 2; i++)
+    {
+        info.props_inline_offset[i] = mapping_size + CACHE_LINE_SIZE * 2;
+        mapping_size = aligned(mapping_size + PROPS_INLINE_SIZE + 2048);
+    }
+    return mapping_size;
+}
+
 void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int clip_count, const VideoInfo vi_array[])
 {
     assert(clip_count > 0);
 
-    // we will copy the structures to the right place later, 
-    // so we don't need to align the allocation here
-    #pragma warning(push)
-    #pragma warning(disable: 4316) // Object allocated on the heap may not be aligned for this type.
-    unique_ptr<shared_memory_clip_info_t[]> info_array(new shared_memory_clip_info_t[clip_count]);
-    #pragma warning(pop)
-    size_t clip_info_size = sizeof(shared_memory_clip_info_t) * clip_count;
-    memset(&info_array[0], 0, clip_info_size);
+    // the clip infos are part of the header, the frame buffers follow them
+    const DWORD header_size = aligned((DWORD)(sizeof(shared_memory_source_header_t) + sizeof(shared_memory_clip_info_t) * clip_count));
 
-    DWORD mapping_size = aligned((DWORD)(sizeof(shared_memory_source_header_t) + clip_info_size));
+    // 1st pass: the size of the mapping (the layout is computed again into the mapping)
+    DWORD mapping_size = header_size;
     for (int clip_i = 0; clip_i < clip_count; clip_i++)
     {
-        shared_memory_clip_info_t& info = info_array[clip_i];
-        info.vi = vi_array[clip_i];
-        DWORD clip_buffer_size = aligned(info.vi.RowSize()) * info.vi.height;
-        info.frame_pitch = aligned(info.vi.RowSize(), FRAME_ALIGN);
-
-        int planes[4];
-        const int plane_count = get_transfer_planes(info.vi, planes);
-        // planes after the first one: [U, V] or [B, R], then A (YA: only A)
-        for (int p = 1; p < plane_count; p++)
-        {
-          const int plane = planes[p];
-          const int row_size = info.vi.RowSize(plane);
-          const int height = (plane == PLANAR_U || plane == PLANAR_V)
-            ? info.vi.height >> info.vi.GetPlaneHeightSubsampling(plane)
-            : info.vi.height;
-          const int pitch = aligned(row_size, FRAME_ALIGN);
-          if (plane == PLANAR_A)
-          {
-            info.frame_pitch_a = pitch;
-            info.frame_offset_a = clip_buffer_size;
-          } else {
-            info.frame_pitch_uv = pitch;
-            if (plane == PLANAR_U || plane == PLANAR_B)
-              info.frame_offset_u = clip_buffer_size;
-            else
-              info.frame_offset_v = clip_buffer_size;
-          }
-          clip_buffer_size += pitch * height;
-        }
-        info.frame_buffer_size = clip_buffer_size;
-
-        // add some extra space before and after the buffer for guard bytes
-        info.frame_response[0].frame_number = -1;
-        info.frame_buffer_offset[0] = mapping_size + CACHE_LINE_SIZE * 2;
-        mapping_size = aligned(mapping_size + clip_buffer_size + 2048);
-
-        info.frame_response[1].frame_number = -1;
-        info.frame_buffer_offset[1] = mapping_size + CACHE_LINE_SIZE * 2;
-        mapping_size = aligned(mapping_size + clip_buffer_size + 2048);
-
-        // inline frame property areas, with the same guard byte spacing
-        for (int i = 0; i < 2; i++)
-        {
-            info.props_inline_offset[i] = mapping_size + CACHE_LINE_SIZE * 2;
-            mapping_size = aligned(mapping_size + PROPS_INLINE_SIZE + 2048);
-        }
+        shared_memory_clip_info_t scratch;
+        mapping_size = compute_clip_layout(scratch, vi_array[clip_i], mapping_size);
     }
 
     _mapping_handle.replace(CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, mapping_size, mapping_name));
     if (!_mapping_handle.is_valid())
     {
-        DWORD error_code = GetLastError();
         assert(false);
         throw runtime_error("Unable to create file mapping object.");
     }
@@ -186,22 +186,25 @@ void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int cli
     }
     map_view();
 
-    memset(header, 0, sizeof(shared_memory_source_header_t));
+    // a new mapping is zero filled: every atomic, lock and counter starts as 0
     header->signature = SHARED_MEMORY_SOURCE_SIGNATURE;
     header->clip_count = clip_count;
     header->server_process_id = GetCurrentProcessId();
-    memcpy(header->clips, &info_array[0], clip_info_size);
+    DWORD offset = header_size;
     for (int i = 0; i < clip_count; i++)
     {
+        shared_memory_clip_info_t& info = header->clips[i];
+        offset = compute_clip_layout(info, vi_array[i], offset);
+        info.frame_response[0].frame_number = -1;
+        info.frame_response[1].frame_number = -1;
         for (int j = 0; j < 2; j++)
         {
-            add_guard_bytes(frame_buffer(i, j), header->clips[i].frame_buffer_size);
+            add_guard_bytes(frame_buffer(i, j), info.frame_buffer_size);
             add_guard_bytes(props_inline_area(i, j), PROPS_INLINE_SIZE);
         }
     }
-
+    assert(offset == mapping_size);
 }
-
 void SharedMemorySourceManager::map_view()
 {
     header = (shared_memory_source_header_t*)MapViewOfFile(_mapping_handle.get(), FILE_MAP_WRITE, 0, 0, 0);
@@ -227,7 +230,7 @@ void SharedMemorySourceManager::signal_shutdown()
     {
         while (true)
         {
-            auto state = header->object_state;
+            object_state_t state = load_object_state(header);
             if (state.shutdown)
             {
                 break;
@@ -235,7 +238,7 @@ void SharedMemorySourceManager::signal_shutdown()
             long old_state_value = state.state_value;
             state.shutdown = 1;
             state.sequence_number++;
-            if (_InterlockedCompareExchange(&header->object_state.state_value, state.state_value, old_state_value) == old_state_value)
+            if (header->object_state.compare_exchange_strong(old_state_value, state.state_value))
             {
                 break;
             }
@@ -271,8 +274,8 @@ void SharedMemorySourceManager::init_client(const SYSCHAR* mapping_name)
     DWORD process_id = GetCurrentProcessId();
     for (int i = 0; i < MAX_SLAVES; i++)
     {
-        volatile DWORD& slot_reference = header->client_process_ids[i];
-        if (InterlockedCompareExchange((volatile LONG*)&slot_reference, (LONG)process_id, 0) == 0)
+        DWORD free_slot = 0;
+        if (header->client_process_ids[i].compare_exchange_strong(free_slot, process_id))
         {
             break;
         }
@@ -366,14 +369,14 @@ SharedMemorySourceManager::~SharedMemorySourceManager()
                 // maybe some clients are terminated by task manager
                 break;
             }
-        } while (header->object_state.client_count > 0);
+        } while (load_object_state(header).client_count > 0);
     } else {
         DWORD process_id = GetCurrentProcessId();
         for (int i = 0; i < MAX_SLAVES; i++)
         {
-            if (header->client_process_ids[i] == process_id)
+            DWORD own_slot = process_id;
+            if (header->client_process_ids[i].compare_exchange_strong(own_slot, 0))
             {
-                header->client_process_ids[i] = 0;
                 break;
             }
         }
@@ -386,11 +389,11 @@ void SharedMemorySourceClientLockAcquire::do_lock(short increment)
 {
     while (true)
     {
-        auto state = _manager.header->object_state;
-        auto old_state_value = state.state_value;
+        object_state_t state = load_object_state(_manager.header);
+        long old_state_value = state.state_value;
         state.sequence_number++;
         state.client_count += increment;
-        if (_InterlockedCompareExchange(&_manager.header->object_state.state_value, state.state_value, old_state_value) == old_state_value)
+        if (_manager.header->object_state.compare_exchange_strong(old_state_value, state.state_value))
         {
             break;
         }

@@ -1,7 +1,8 @@
 #pragma once
 
 #include "avisynth.h"
-#include "Lock.h"
+#include <atomic>
+#include <mutex>
 #include "Handle.h"
 
 #include <Windows.h>
@@ -62,7 +63,7 @@ public:
 
     OwnedEventHandle new_frame_in_cache_event;
 protected:
-    CriticalSectionLock _lock;
+    std::mutex _lock;
 
 private:
     unsigned thread_proc();
@@ -74,14 +75,14 @@ private:
     void fetch_frame(ClipInfo& clip, int n);
     PVideoFrame try_get_frame(ClipInfo& clip, int n);
 
-    bool _shutdown;
+    std::atomic<bool> _shutdown;
     int _max_cache_frames;
     int _cache_behind;
     std::vector<ClipInfo> _clips;
 
     IScriptEnvironment* _env;
 
-    volatile FetchInfo _fetch_info;
+    FetchInfo _fetch_info; // protected by _lock
     std::function<void (void)> _worker_callback;
 
     OwnedHandle _worker_thread;

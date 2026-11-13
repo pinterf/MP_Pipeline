@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Windows.h>
-#include <intrin.h>
 #include <assert.h>
 
 #include "SpinLockImplementations.h"
@@ -30,7 +29,7 @@ class SpinLock
 #endif
 public:
 
-    SpinLock(volatile spin_lock_value_type_t* lock_ptr) : impl(lock_ptr)
+    SpinLock(spin_lock_t* lock_ptr) : impl(lock_ptr)
     {
         assert(lock_ptr);
         if (_processor_count == 0)

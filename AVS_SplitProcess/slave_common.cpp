@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <string>
+#include <atomic>
+#include <mutex>
 
 #include "slave_common.h"
 #include "ScopeExit.h"
@@ -16,13 +18,15 @@
 #define TRACE_COMPONENT L"slave_common"
 #include "trace.h"
 
-static volatile HANDLE _startup_mutex = NULL;
+// one slave start at a time in the process: the environment variables passed to the slave
+// and the inherited pipe handles are process wide
+static std::mutex _startup_mutex;
 
-static volatile LONG _port_counter = 1;
+static std::atomic<int> _port_counter(1);
 
 int get_unused_port()
 {
-    return InterlockedIncrement(&_port_counter);
+    return ++_port_counter;
 }
 
 #define TRACE_ERROR(format, ...) \
@@ -57,29 +61,14 @@ HANDLE create_slave_process(slave_create_params* params, char* error_msg, size_t
         return NULL;
     }
 
-    if (_startup_mutex == NULL)
-    {
-        HANDLE new_mutex = CreateMutex(NULL, FALSE, NULL);
-        if (!new_mutex)
-        {
-            TRACE_ERROR("CreateMutex failed, code = %lu", GetLastError());
-            return NULL;
-        }
-        if (InterlockedCompareExchangePointer(&_startup_mutex, new_mutex, NULL) != NULL)
-        {
-            // other thread wins
-            CloseHandle(new_mutex);
-        }
-    }
     bool success = false;
     HANDLE pipe_stdin_read = NULL, pipe_stdin_write = NULL;
     HANDLE pipe_stdout_read = NULL, pipe_stdout_write = NULL;
     HANDLE slave_process = NULL;
 
-    WaitForSingleObject(_startup_mutex, INFINITE);
+    std::lock_guard<std::mutex> startup_lock(_startup_mutex);
     auto cleanup = make_scope_exit([&]
     {
-        ReleaseMutex(_startup_mutex);
         if (slave_process)
         {
             CloseHandle(slave_process);

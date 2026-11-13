@@ -54,13 +54,13 @@ public:
 
     // Replaces the slot's properties with those of 'frame'. Throws std::runtime_error.
     void write(IScriptEnvironment* env, const FramePropsCaps& caps, const PVideoFrame& frame,
-        volatile props_slot_state_t& state, uint8_t* inline_area);
+        props_slot_state_t& state, uint8_t* inline_area);
 
     // statistics, for tracing and tests
     unsigned int realloc_count() const { return _realloc_count; }
 
 private:
-    void reallocate(size_t capacity, volatile props_slot_state_t& state);
+    void reallocate(size_t capacity, props_slot_state_t& state);
 
     sys_string _key;
     int _clip_index;
@@ -85,7 +85,7 @@ public:
 
     // Adds the slot's properties to 'frame'. Throws std::runtime_error.
     void read(IScriptEnvironment* env, const FramePropsCaps& caps, PVideoFrame& frame,
-        const volatile props_slot_state_t& state, const uint8_t* inline_area);
+        const props_slot_state_t& state, const uint8_t* inline_area);
 
 private:
     void release_view();

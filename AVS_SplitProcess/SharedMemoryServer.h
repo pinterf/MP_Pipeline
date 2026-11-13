@@ -5,6 +5,7 @@
 #include "SharedMemoryCommon.h"
 #include "Handle.h"
 
+#include <atomic>
 #include <vector>
 
 class SharedMemoryServer : private SharedMemoryServer_parameter_storage_t, public GenericVideoFilter
@@ -41,5 +42,5 @@ private:
     std::vector<std::unique_ptr<PropsWriter> > _props_writers;
     OwnedHandle _thread_handle;
     std::vector<HANDLE> _activity_wait_handles;
-    volatile bool _shutdown;
+    std::atomic<bool> _shutdown;
 };

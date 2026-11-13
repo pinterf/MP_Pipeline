@@ -83,7 +83,7 @@ PropsWriter::~PropsWriter()
     }
 }
 
-void PropsWriter::reallocate(size_t capacity, volatile props_slot_state_t& state)
+void PropsWriter::reallocate(size_t capacity, props_slot_state_t& state)
 {
     props_log("server clip %d slot %d: overflow mapping %u -> %u bytes (gen %u, window peak %u)",
         _clip_index, _slot, (unsigned)_capacity, (unsigned)capacity, _gen + 1, (unsigned)_window_peak);
@@ -134,7 +134,7 @@ void PropsWriter::reallocate(size_t capacity, volatile props_slot_state_t& state
 }
 
 void PropsWriter::write(IScriptEnvironment* env, const FramePropsCaps& caps, const PVideoFrame& frame,
-    volatile props_slot_state_t& state, uint8_t* inline_area)
+    props_slot_state_t& state, uint8_t* inline_area)
 {
     // until the new content is complete, the slot has no properties
     state.size = 0;
@@ -224,7 +224,7 @@ void PropsReader::release_view()
 }
 
 void PropsReader::read(IScriptEnvironment* env, const FramePropsCaps& caps, PVideoFrame& frame,
-    const volatile props_slot_state_t& state, const uint8_t* inline_area)
+    const props_slot_state_t& state, const uint8_t* inline_area)
 {
     props_slot_state_t s;
     s.size = state.size;

@@ -319,7 +319,6 @@
     <ClInclude Include="FrameFetcher.h" />
     <ClInclude Include="FrameProps.h" />
     <ClInclude Include="Handle.h" />
-    <ClInclude Include="Lock.h" />
     <ClInclude Include="NonCopyableClassBase.h" />
     <ClInclude Include="SafeEnv.h" />
     <ClInclude Include="SelectThunkEvery.h" />
@@ -346,7 +345,6 @@
     <ClCompile Include="CondVar.cpp" />
     <ClCompile Include="FrameFetcher.cpp" />
     <ClCompile Include="FrameProps.cpp" />
-    <ClCompile Include="Lock.cpp" />
     <ClCompile Include="MP_Pipeline.cpp" />
     <ClCompile Include="SafeEnv.cpp" />
     <ClCompile Include="SelectThunkEvery.cpp" />

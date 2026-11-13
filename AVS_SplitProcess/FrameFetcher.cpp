@@ -36,7 +36,7 @@ unsigned FrameFetcher::thread_proc()
             bool has_no_work = false;
 
             { // lock start
-                CSLockAcquire lock(_lock);
+                std::lock_guard<std::mutex> lock(_lock);
                 if (_worker_callback) {
                     callback = _worker_callback;
                 } else if (_fetch_info.is_fetching) {
@@ -98,7 +98,7 @@ unsigned FrameFetcher::thread_proc()
             {
                 callback();
                 { // lock start
-                    CSLockAcquire lock(_lock);
+                    std::lock_guard<std::mutex> lock(_lock);
                     _worker_callback = nullptr;
                 } // lock end
                 work_item_completed(1);
@@ -126,9 +126,6 @@ unsigned FrameFetcher::thread_proc()
 
 void FrameFetcher::work_item_completed(DWORD wait_time)
 {
-#ifdef _DEBUG
-    assert(!_lock.IsOwnedLock());
-#endif
     _worker_workitem_completed_event.set();
     _worker_waiting_for_work_event.wait(wait_time);
 }
@@ -138,7 +135,7 @@ void FrameFetcher::fetch_frame(ClipInfo& clip, int n)
     int fetch_start = -1;
 
     { // lock start
-        CSLockAcquire lock(_lock);
+        std::lock_guard<std::mutex> lock(_lock);
         if (n >= clip.cache_frame_start)
         {
             while (clip.frame_cache.size() > 0 && n - clip.cache_frame_start + 1 > _max_cache_frames)
@@ -178,7 +175,7 @@ void FrameFetcher::fetch_frame(ClipInfo& clip, int n)
         TRACE("Time elapsed while fetching frame %d: %lld us", n, us_time() - start_time);
 #endif
         { // lock start
-            CSLockAcquire lock(_lock);
+            std::lock_guard<std::mutex> lock(_lock);
             TRACE("Adding frame %d to cache", clip.cache_frame_start + clip.frame_cache.size());
             clip.frame_cache.push_back(frame);
         } // lock end
@@ -189,7 +186,7 @@ void FrameFetcher::fetch_frame(ClipInfo& clip, int n)
 
 PVideoFrame FrameFetcher::try_get_frame_from_cache(int clip_index, int n)
 {
-    CSLockAcquire lock(_lock);
+    std::lock_guard<std::mutex> lock(_lock);
     ClipInfo& info = _clips[clip_index];
     int index = n - info.cache_frame_start;
     if (index >= 0 && index < (int)info.frame_cache.size())
@@ -203,7 +200,7 @@ PVideoFrame FrameFetcher::try_get_frame_from_cache(int clip_index, int n)
 void FrameFetcher::set_last_requested_frame(int clip_index, int n, bool set_only_if_larger)
 {
     {
-        CSLockAcquire lock(_lock);
+        std::lock_guard<std::mutex> lock(_lock);
         ClipInfo& info = _clips[clip_index];
         if (set_only_if_larger && n <= info.last_requested_frame)
         {
@@ -224,7 +221,7 @@ PVideoFrame FrameFetcher::try_get_frame(ClipInfo& clip, int n)
     {
         frame = clip.clip->GetFrame(n, _env);
     } catch (AvisynthError& ex) {
-        CSLockAcquire lock(_lock);
+        std::lock_guard<std::mutex> lock(_lock);
         clip.error_msg.assign(ex.msg);
         clip.frame_cache.clear();
         frame = NULL;
@@ -243,7 +240,7 @@ void FrameFetcher::invoke_in_worker_thread(function<void (void)> func)
     while (!completed)
     {
         { // lock start
-            CSLockAcquire lock(_lock);
+            std::lock_guard<std::mutex> lock(_lock);
             if (!_worker_callback)
             {
                 if (completed) 
@@ -316,7 +313,7 @@ PVideoFrame FrameFetcher::GetFrame(int clip_index, int n, IScriptEnvironment* en
     while (true)
     {
         { // lock start
-            CSLockAcquire lock(_lock);
+            std::lock_guard<std::mutex> lock(_lock);
             if (_shutdown)
             {
                 env->ThrowError("FrameFetcher: Already shut down!");
@@ -379,7 +376,7 @@ FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_
         env->ThrowError("FrameFetcher: cache_behind must be greater than or equal to 0.");
     }
 
-    memset((void*)&_fetch_info, 0, sizeof(_fetch_info));
+    memset(&_fetch_info, 0, sizeof(_fetch_info));
 
     if (!_worker_workitem_completed_event.is_valid() || !_worker_waiting_for_work_event.is_valid())
     {
