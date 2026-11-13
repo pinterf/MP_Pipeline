@@ -60,6 +60,9 @@ Change log:
 * Source: standard C++ instead of MSVC-only constructs (__try/__finally, temporaries bound to non-const
   references, __declspec(align)); builds with ClangCL as well, compiles with MinGW GCC and llvm-mingw
   (x86, x64, aarch64). The shared memory layout is the same with every compiler (compile-time checks).
+* Build: no external libraries. The asmlib memory/string functions (lib/alibcof*.lib) are replaced by
+  the standard ones (today's compilers and runtimes are as fast or faster); the unused AviSynth import
+  libraries and the lib folder are removed. Links only system libraries (rpcrt4, psapi).
 * Documentation: frame properties, pixel formats, ### frame props statement;
   new demo script Documentation/MP_Pipeline_frameprops_demo.avs
 * Tests: tests/Pipeline (AVSMeter based pipeline tests, run_tests.ps1) and tests/FrameProps
