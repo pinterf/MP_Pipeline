@@ -84,6 +84,10 @@ Change log:
   functions, volatile and critical sections. The spin locks in the shared memory take and release
   with acquire / release ordering: correct with every compiler and CPU (the old volatile store
   relied on MSVC's x86/x64 behavior, a prerequisite for ARM64). The shared memory layout is unchanged.
+* "### lock threads to cores" is accepted and ignored: no more thread pinning, the operating system
+  schedules the threads (pinning rather hurt with today's schedulers, hybrid and many-core CPUs).
+  The fetcher_thread_lock_to_cpu / server_thread_lock_to_cpu parameters of MPP_SharedMemoryServer
+  are ignored as well.
 * Build: CMake build for MinGW (GCC, Clang) and llvm-mingw; Windows on ARM64 build (build_arm64_mingw.bat,
   cross-compiled with llvm-mingw, for the llvm-mingw built ARM64 AviSynth+). A MinGW build needs a MinGW
   built AviSynth+ in its process (the C++ exceptions of the AviSynth interface differ between MSVC and

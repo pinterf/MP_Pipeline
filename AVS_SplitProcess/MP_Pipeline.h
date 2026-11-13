@@ -6,15 +6,6 @@
 
 static const char* SCRIPT_SPLITTER_PATTERN = "^(\\s*### ###\\s*)$";
 
-// for use with SetThreadAffinityMask
-static const int MAX_CPU = 64;
-
-typedef struct _cpu_arrangement_info_t
-{
-    int arrangement[MAX_CPU + 1];
-    int cpu_count;
-    int current_index;
-} cpu_arrangement_info_t;
 
 
 class MP_Pipeline : public GenericVideoFilter2, MP_Pipeline_parameter_storage_t
@@ -25,10 +16,10 @@ public:
 private:
     void create_pipeline(IScriptEnvironment* env);
 
-    void create_branch(char* script, char* next_script, int* slave_count, int block_number, cpu_arrangement_info_t* cpu_arrangement_info, IScriptEnvironment* env);
+    void create_branch(char* script, char* next_script, int* slave_count, int block_number, IScriptEnvironment* env);
     void create_pipeline_finish(char* script, IScriptEnvironment* env);
 
-    void prepare_slave(slave_create_params* params, cpu_arrangement_info_t* cpu_arrangement_info, IScriptEnvironment* env);
+    void prepare_slave(slave_create_params* params, IScriptEnvironment* env);
     void close_slave_stdin_handles();
 
     char _instance_id[100];

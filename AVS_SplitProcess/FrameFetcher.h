@@ -45,8 +45,7 @@ typedef struct _FetchInfo
 class FrameFetcher
 {
 public:
-    // worker_cpu: the logical processor the worker thread is locked to, -1: none
-    FrameFetcher(const PClip clips[], int max_cache_frames, int cache_behind, IScriptEnvironment* env, int worker_cpu = -1);
+    FrameFetcher(const PClip clips[], int max_cache_frames, int cache_behind, IScriptEnvironment* env);
     ~FrameFetcher();
     
     PVideoFrame GetFrame(int clip_index, int n, IScriptEnvironment* env);
@@ -88,7 +87,6 @@ private:
     std::function<void (void)> _worker_callback;
     std::function<void (void)> _new_frame_callback; // protected by _lock
 
-    int _worker_cpu;
     std::thread _worker_thread;
     // manual reset: every thread waiting for a work item is released when it is signaled
     LocalEvent _worker_workitem_completed_event;

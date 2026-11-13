@@ -36,8 +36,7 @@
 #define MT_MODE_START "^\\s*### setmtmode:"
 #define MT_MODE_PARAM "\\s*(\\d+)\\s*,\\s*(\\d+)\\s*$"
 
-#define LOCK_THREADS_TO_CORES_START "^\\s*### lock threads to cores"
-#define LOCK_THREADS_TO_CORES_PARAM "\\s*(\\d+)\\s*$"
+
 
 #define FRAME_PROPS_STATEMENT_START "^\\s*### frame props:"
 #define FRAME_PROPS_STATEMENT_PARAM "\\s*(\\w+)\\s*$"
@@ -247,7 +246,7 @@ void check_single_platform(const char* script, int block_number, IScriptEnvironm
     }
 }
 
-void MP_Pipeline::prepare_slave(slave_create_params* params, cpu_arrangement_info_t* cpu_arrangement_info, IScriptEnvironment* env)
+void MP_Pipeline::prepare_slave(slave_create_params* params, IScriptEnvironment* env)
 {
     params->slave_job_object = _slave_job;
     scan_statement(params->script, PLATFORM_PATTERN, NULL, PLATFORM_SCAN_FORMAT, params->slave_platform);
@@ -275,21 +274,8 @@ void MP_Pipeline::prepare_slave(slave_create_params* params, cpu_arrangement_inf
         }
         sprintf_append(params->script, ", max_cache_frames=%d, cache_behind=%d", max_cache_frames, cache_behind);
     }
-    if (has_statement(params->script, LOCK_THREADS_TO_CORES_START) && cpu_arrangement_info->cpu_count > 1)
-    {
-        int new_index = 0;
-        if (scan_statement(params->script, LOCK_THREADS_TO_CORES_START LOCK_THREADS_TO_CORES_PARAM, NULL,
-            "%d", &new_index))
-            cpu_arrangement_info->current_index = new_index;
-        int fetcher_cpu_index = cpu_arrangement_info->arrangement[cpu_arrangement_info->current_index];
-        cpu_arrangement_info->current_index++;
-        cpu_arrangement_info->current_index %= cpu_arrangement_info->cpu_count;
-
-
-        int server_cpu_index = cpu_arrangement_info->arrangement[cpu_arrangement_info->current_index];
-        sprintf_append(params->script, ", fetcher_thread_lock_to_cpu=%d, server_thread_lock_to_cpu=%d", 
-            fetcher_cpu_index, server_cpu_index);
-    }
+    // "### lock threads to cores" is accepted and ignored since 2.0: the operating system schedules
+    // the threads (pinning them did not help with today's schedulers, hybrid and many-core CPUs)
     if (has_statement(params->script, FRAME_PROPS_STATEMENT_START))
     {
         char value[8] = { 0 };
@@ -394,7 +380,7 @@ void end_prepare_downstream_clip_function(char* script)
     strcat(script, "}\n");
 }
 
-void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_count, int block_number, cpu_arrangement_info_t* cpu_arrangement_info, IScriptEnvironment* env)
+void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_count, int block_number, IScriptEnvironment* env)
 {
     int branch_count = 0;
     char* thunk_size_str = NULL;
@@ -456,7 +442,7 @@ void MP_Pipeline::create_branch(char* script, char* next_script, int* slave_coun
             memset(&params, 0, sizeof(params));
             params.filter_name = "MP_Pipeline";
             params.script = buffer;
-            prepare_slave(&params, cpu_arrangement_info, env);
+            prepare_slave(&params, env);
 
             int port = -1;
             create_slave(env, &params, &port, _slave_stdin_handles + *slave_count);
@@ -488,95 +474,6 @@ void MP_Pipeline::create_pipeline_finish(char* script, IScriptEnvironment* env)
     }
 }
 
-template <typename T>
-int count_bits_set(T number)
-{
-    int result = 0;
-    for (int i = 0; i < sizeof(number) * 8; i++)
-    {
-        if ((number & 1) == 1)
-        {
-            result++;
-        }
-        number >>= 1;
-    }
-    return result;
-}
-
-int get_cpu_arrangement(int* arrangement)
-{
-    platform::ProcessorTopology topology;
-    if (!platform::get_processor_topology(topology))
-    {
-        TRACE("Unable to get the processor topology.");
-        return 0;
-    }
-
-    uint64_t cpu_groups[MAX_CPU];
-    memset(cpu_groups, 0, sizeof(cpu_groups));
-
-    int cpu_group_count = 0;
-    int logical_processor_count = 0;
-    for (size_t i = 0; i < topology.core_masks.size() && cpu_group_count < MAX_CPU; i++)
-    {
-        cpu_groups[cpu_group_count] = topology.core_masks[i];
-        cpu_group_count++;
-        logical_processor_count += count_bits_set(topology.core_masks[i]);
-    }
-
-    if (logical_processor_count <= 0)
-    {
-        // will this happen?
-        assert(false);
-        return 0;
-    }
-
-    const uint64_t system_affinity_mask = topology.usable_mask;
-    int usable_processor_count = count_bits_set(system_affinity_mask);
-    if (usable_processor_count > logical_processor_count)
-    {
-        assert(false);
-        return 0;
-    }
-    int current_group = 0;
-    // fill the arrangement array, ensure different processes are spreaded over all available cores, aware of hyper-threading
-    for (int lp_i = 0; lp_i < (std::min)(usable_processor_count, MAX_CPU); lp_i++)
-    {
-        while (true)
-        {
-            bool found_cpu = false;
-            for (int c_i = 0; c_i < MAX_CPU; c_i++)
-            {
-                uint64_t mask = ((uint64_t)1) << c_i;
-                if ((cpu_groups[current_group] & mask) == mask)
-                {
-                    cpu_groups[current_group] &= ~mask;
-                    if ((system_affinity_mask & mask) == 0)
-                    {
-                        // we can't use this processor
-                        continue;
-                    }
-                    found_cpu = true;
-                    *arrangement = c_i;
-                    arrangement++;
-                    break;
-                }
-            }
-            current_group++;
-            if (current_group >= cpu_group_count)
-            {
-                current_group = 0;
-            }
-            if (found_cpu)
-            {
-                break;
-            }
-        }
-
-    }
-    return logical_processor_count;
-}
-
 void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
 {
     char* script_dup = _strdup(_script);
@@ -587,12 +484,6 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
     memset(branch_ports, 0, sizeof(branch_ports));
     bool completed = false;
 
-    cpu_arrangement_info_t cpu_arrangement_info;
-    memset(&cpu_arrangement_info, 0xFF, sizeof(cpu_arrangement_info));
-    cpu_arrangement_info.cpu_count = get_cpu_arrangement(cpu_arrangement_info.arrangement);
-    assert(cpu_arrangement_info.arrangement[MAX_CPU] == -1);
-    assert(cpu_arrangement_info.cpu_count <= MAX_CPU);
-    cpu_arrangement_info.current_index = 0;
 
     auto cleanup = make_scope_exit([&]
     {
@@ -650,7 +541,7 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
 
             if (has_statement(current_script_part, BRANCH_STATEMENT_START))
             {
-                create_branch(current_script_part, next_script_part, &slave_count, block_number, &cpu_arrangement_info, env);
+                create_branch(current_script_part, next_script_part, &slave_count, block_number, env);
                 port = 0;
             } else {
                 append_prepare_last(current_script_part, block_number);
@@ -664,7 +555,7 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
                 memset(&params, 0, sizeof(params));
                 params.filter_name = "MP_Pipeline";
                 params.script = current_script_part;
-                prepare_slave(&params, &cpu_arrangement_info, env);
+                prepare_slave(&params, env);
 
                 create_slave(env, &params, &port, _slave_stdin_handles + slave_count);
 				

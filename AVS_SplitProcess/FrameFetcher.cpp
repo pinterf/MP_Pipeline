@@ -1,6 +1,5 @@
 #include "common.h"
 #include "FrameFetcher.h"
-#include "platform.h"
 
 // #define ENABLE_TRACING
 #define TRACE_PREFIX __TRACE_TEXT("FrameFetcher")
@@ -18,8 +17,7 @@ using namespace std;
 
 unsigned FrameFetcher::thread_proc()
 {
-    // a failure is ignored, as before: the fetcher works without the affinity
-    platform::lock_current_thread_to_cpu(_worker_cpu);
+
     try
     {
         while (!_shutdown)
@@ -346,14 +344,13 @@ PVideoFrame FrameFetcher::GetFrame(int clip_index, int n, IScriptEnvironment* en
 }
 
 
-FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_behind, IScriptEnvironment* env, int worker_cpu)
+FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_behind, IScriptEnvironment* env)
     : _max_cache_frames(max_cache_frames <= cache_behind ? cache_behind + 1 : max_cache_frames),  
       _cache_behind(cache_behind),
       _env(env),
       _clips(),
       _lock(),
       _worker_callback(),
-      _worker_cpu(worker_cpu),
       _worker_workitem_completed_event(true),
       _worker_waiting_for_work_event(false),
 

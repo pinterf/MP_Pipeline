@@ -49,53 +49,6 @@ int processor_count()
     return si.dwNumberOfProcessors > 0 ? (int)si.dwNumberOfProcessors : 1;
 }
 
-bool get_processor_topology(ProcessorTopology& topology)
-{
-    topology.core_masks.clear();
-    topology.usable_mask = 0;
-
-    std::vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION> info;
-    DWORD buffer_size = 0;
-    while (!GetLogicalProcessorInformation(info.empty() ? NULL : &info[0], &buffer_size))
-    {
-        if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-        {
-            return false;
-        }
-        info.resize(buffer_size / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION) + 1);
-    }
-    info.resize(buffer_size / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION));
-    for (size_t i = 0; i < info.size(); i++)
-    {
-        if (info[i].Relationship == RelationProcessorCore)
-        {
-            topology.core_masks.push_back((uint64_t)info[i].ProcessorMask);
-        }
-    }
-
-    DWORD_PTR process_mask = 0, system_mask = 0;
-    if (!GetProcessAffinityMask(GetCurrentProcess(), &process_mask, &system_mask))
-    {
-        return false;
-    }
-    // the system mask, as before: the processors the system has (the process may widen to them)
-    topology.usable_mask = (uint64_t)system_mask;
-    return true;
-}
-
-bool lock_current_thread_to_cpu(int cpu)
-{
-    if (cpu < 0)
-    {
-        return true;
-    }
-    if (cpu >= (int)(sizeof(DWORD_PTR) * 8))
-    {
-        return false;
-    }
-    return SetThreadAffinityMask(GetCurrentThread(), ((DWORD_PTR)1) << cpu) != 0;
-}
-
 // --- misc --------------------------------------------------------------------------------------
 
 std::string new_unique_id()

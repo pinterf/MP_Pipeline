@@ -392,7 +392,7 @@ SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, cons
     _env(env),
     _shutdown(false),
     _thread_exited(false),
-    _fetcher(clips, _max_cache_frames, _cache_behind, env, _fetcher_thread_lock_to_cpu),
+    _fetcher(clips, _max_cache_frames, _cache_behind, env),
     _manager(get_shared_memory_key(_instance_key, _port), clip_count, vi_array),
     _props_caps(detect_frame_props_caps(env))
 {
@@ -415,9 +415,8 @@ SharedMemoryServer::SharedMemoryServer(const PClip clips[], int clip_count, cons
 
     try
     {
+        // fetcher_thread_lock_to_cpu / server_thread_lock_to_cpu are accepted and ignored since 2.0
         _thread = std::thread([this] {
-            // a failed affinity is ignored: the server works without it
-            platform::lock_current_thread_to_cpu(_server_thread_lock_to_cpu);
             thread_proc();
             _thread_exited = true;
         });

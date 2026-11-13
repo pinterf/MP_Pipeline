@@ -8,7 +8,6 @@
 
 #include <stdint.h>
 #include <string>
-#include <vector>
 
 #include "NonCopyableClassBase.h"
 #include "SystemChar.h"
@@ -31,18 +30,6 @@ bool is_process_alive(uint32_t process_id);
 // number of logical processors of the system (at least 1)
 int processor_count();
 
-// For "### lock threads to cores": the logical processors of each physical core as bit masks
-// (bit n: logical processor n), and the processors the process may use. False on failure.
-struct ProcessorTopology
-{
-    std::vector<uint64_t> core_masks;
-    uint64_t usable_mask;
-};
-bool get_processor_topology(ProcessorTopology& topology);
-
-// Locks the calling thread to one logical processor (cpu < 0: no change). Called by the thread
-// itself, so it works with any std::thread implementation. Returns false on failure.
-bool lock_current_thread_to_cpu(int cpu);
 
 // --- misc --------------------------------------------------------------------------------------
 

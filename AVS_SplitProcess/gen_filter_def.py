@@ -22,6 +22,7 @@ def generate_output():
         p("c*", "aux_clips", optional=True, has_field=False),
         p("i", "max_cache_frames", optional=True, default_value=1),
         p("i", "cache_behind", optional=True, default_value=0),
+        # fetcher_thread_lock_to_cpu, server_thread_lock_to_cpu: accepted and ignored since 2.0
         p("i", "fetcher_thread_lock_to_cpu", optional=True, default_value=-1),
         p("i", "server_thread_lock_to_cpu", optional=True, default_value=-1),
         p("b", "props", optional=True, default_value="true"),

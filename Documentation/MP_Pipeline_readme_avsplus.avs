@@ -139,9 +139,10 @@ Please see the example above for details.
 
 ### lock threads to cores
 
-Slave processes with this statement will lock their worker threads into a core. This may improve performance for some scripts.
-
-Core selection is on a round-robin manner, with awareness of hyper-threading.
+Accepted for compatibility and ignored since 2.0: the operating system schedules the threads.
+(Before 2.0 the two helper threads of the slave process were locked to logical processors, round
+robin over the physical cores. With today's schedulers, hybrid (P/E core) and many-core CPUs
+pinning them was more likely to hurt than help.)
 
 #######################################################
 

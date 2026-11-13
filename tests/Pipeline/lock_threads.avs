@@ -1,5 +1,5 @@
-# "### lock threads to cores": the fetcher and server threads of the slaves lock themselves to
-# logical processors; frames and properties must pass unchanged (prefetch, branch, a plain hop)
+# "### lock threads to cores": accepted and ignored since 2.0 (no thread pinning any more);
+# scripts using it must still work, frames and properties pass unchanged (prefetch, branch, a plain hop)
 # generated settings: MPP_DLL, LOG_DIR, OTHER_PLATFORM (see run_tests.ps1)
 Import(ScriptDir() + "_config.avsi")
 LoadPlugin(MPP_DLL)
