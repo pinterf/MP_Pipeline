@@ -6,6 +6,7 @@
 
 
 #include <stdint.h>
+#include <stdio.h>
 #include <memory>
 #include <string>
 
@@ -132,6 +133,31 @@ private:
     void* _input_write;
     void* _output_read;
 };
+
+// --- the slave program (platform_win32_slave.cpp, linked into the slave only) ------------------
+
+// Keeps the handshake output apart from what filters print: returns a stream to the process'
+// original stdout (the pipe the master reads) and points stdout to stderr. NULL on failure.
+FILE* take_over_stdout();
+
+// false and the reason when the process has no usable stdin (the master's pipe)
+bool check_input(std::string& error_message);
+
+// Reads stdin until the master closes it: the slave's work is done. false: a read error, with
+// the reason.
+bool wait_for_end_of_input(std::string& error_message);
+
+// Loads a library (the AviSynth DLL) by name or path; it is never unloaded. NULL and the reason
+// on failure.
+void* load_library(const char* name, std::string& error_message);
+void* library_symbol(void* library, const char* name);
+
+// No error dialogs while the slave exits (filters failing in their destructors): on Windows the
+// system error boxes, unhandled exceptions and the abort message of every loaded VC runtime.
+void suppress_error_dialogs();
+
+// ends the process at once (no destructors, no atexit handlers)
+[[noreturn]] void exit_process(int exit_code);
 
 // --- named events (between processes) ----------------------------------------------------------
 

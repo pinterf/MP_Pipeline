@@ -12,17 +12,11 @@
 #include <thread>
 #include <vector>
 #include <assert.h>
-#include <io.h>
 #include <stdlib.h>
-#include <fcntl.h>
-#include <Psapi.h>
 
 #include "../AVS_SplitProcess/statement.h"
 
 typedef IScriptEnvironment* (__stdcall *CreateScriptEnvironment_t)(int);
-
-typedef unsigned int (__cdecl *_set_abort_behavior_t)(unsigned int _Flags, unsigned int _Mask);
-typedef int (__cdecl *_set_error_mode_t)(int _Mode);
 
 #define DLL_STATEMENT_START "^\\s*### dll:"
 #define DLL_STATEMENT_PARAM "\\s*(.*?)\\s*$"
@@ -72,84 +66,24 @@ static void set_script_name_vars(IScriptEnvironment* env)
     }
 }
 
-LONG WINAPI exit_on_unhandled_exception(struct _EXCEPTION_POINTERS *ExceptionInfo) {
-    ExitProcess(255);
-    return EXCEPTION_EXECUTE_HANDLER;
-}
-
-void exit_on_timeout() {
+#ifndef _DEBUG
+// the slave does not always exit (filters failing in their destructors): the last resort
+static void exit_on_timeout()
+{
     std::this_thread::sleep_for(std::chrono::seconds(15));
-    ExitProcess(253);
+    platform::exit_process(253);
 }
-
-void error_box(char* format, ...) {
-    char message[16384];
-    memset(message, 0, sizeof(message));
-    va_list va;
-    va_start(va, format);
-    vsnprintf(message, sizeof(message)-1, format, va);
-    va_end(va);
-    MessageBoxA(NULL, message, "Message", MB_OK);
-}
-
-int silent_error_messages() {
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
-    SetUnhandledExceptionFilter(exit_on_unhandled_exception);
-#if defined(_MSC_VER) || defined(_UCRT)
-    // the old msvcrt.dll of MinGW (MSYS2 MINGW32 / MINGW64) has no _set_abort_behavior;
-    // the loop below sets it in every loaded VC runtime anyway
-    _set_abort_behavior(0, _CALL_REPORTFAULT | _WRITE_ABORT_MSG);
 #endif
-    _set_error_mode(_OUT_TO_STDERR);
-
-    // Dirty hack to silent abort message box by other versions of VC runtime
-    DWORD bytes_needed = 0;
-    HMODULE modules[16384];
-    memset(modules, 0, sizeof(modules));
-    if (!EnumProcessModules(GetCurrentProcess(), modules, sizeof(modules), &bytes_needed)) {
-#ifdef _DEBUG
-        error_box("EnumProcessModules failed (%lu)", GetLastError());
-#endif
-        return 1;
-    }
-    for (size_t i = 0; i < bytes_needed / sizeof(HMODULE); i++) {
-        char module_file_name[MAX_PATH + 1];
-        memset(module_file_name, 0, sizeof(module_file_name));
-        if (!GetModuleFileNameA(modules[i], module_file_name, MAX_PATH)) {
-#ifdef _DEBUG
-            error_box("GetModuleFileName failed (%d, %p)", GetLastError(), modules[i]);
-#endif
-            continue;
-        }
-        char* pos = strrchr(module_file_name, '\\');
-        char* name = pos ? pos + 1 : module_file_name;
-        if (_strnicmp(name, "msvcr", 5) != 0) {
-            // Not VC runtime
-            continue;
-        }
-        _set_abort_behavior_t sab = (_set_abort_behavior_t)GetProcAddress(modules[i], "_set_abort_behavior");
-        if (sab) {
-            sab(0, _CALL_REPORTFAULT | _WRITE_ABORT_MSG);
-        }
-
-        _set_error_mode_t sem = (_set_error_mode_t)GetProcAddress(modules[i], "_set_error_mode");
-        if (sem) {
-            sem(_OUT_TO_STDERR);
-        }
-    }
-    return 0;
-}
 
 int main()
 {
-    HANDLE stdout_handle_original = GetStdHandle(STD_OUTPUT_HANDLE);
-    assert(stdout_handle_original != INVALID_HANDLE_VALUE);
-    HANDLE stdout_handle = INVALID_HANDLE_VALUE;
-    DuplicateHandle(GetCurrentProcess(), stdout_handle_original, GetCurrentProcess(), &stdout_handle, 0, FALSE, DUPLICATE_CLOSE_SOURCE | DUPLICATE_SAME_ACCESS);
-    assert(stdout_handle != INVALID_HANDLE_VALUE);
-    SetStdHandle(STD_OUTPUT_HANDLE, GetStdHandle(STD_ERROR_HANDLE));
-
-    auto stdout_file = _fdopen(_open_osfhandle((intptr_t)stdout_handle, _O_TEXT), "w");
+    // the handshake and error messages for the master; filters' own output goes to stderr
+    FILE* stdout_file = platform::take_over_stdout();
+    if (!stdout_file)
+    {
+        // nothing to report the problem to: the master sees the exit code
+        return 8;
+    }
     std::string script_text;
     if (!platform::get_environment_variable(SCRIPT_VAR_NAME_A, script_text))
     {
@@ -162,14 +96,11 @@ int main()
       fprintf(stdout_file, "Script is empty.\n");
         return 2;
     }
-    HANDLE stdin_handle = GetStdHandle(STD_INPUT_HANDLE);
-    if (!stdin_handle)
+    std::string input_error;
+    if (!platform::check_input(input_error))
     {
-      fprintf(stdout_file, "Standard input not redirected.\n");
+        fprintf(stdout_file, "%s\n", input_error.c_str());
         return 5;
-    } else if (stdin_handle == INVALID_HANDLE_VALUE) {
-      fprintf(stdout_file, "GetStdHandle failed, code = %lu.\n", GetLastError());
-        return 6;
     }
     const char* avisynth_module_name = "avisynth.dll"; // Default
     scan_statement(script, DLL_STATEMENT_START DLL_STATEMENT_PARAM, NULL,
@@ -177,16 +108,17 @@ int main()
         NULL, NULL
     );
 
-    HMODULE avisynth_module = LoadLibraryA(avisynth_module_name);
+    std::string load_error;
+    void* avisynth_module = platform::load_library(avisynth_module_name, load_error);
     if (!avisynth_module)
     {
-        fprintf(stdout_file, "Unable to load %s, code = %lu\n", avisynth_module_name, GetLastError());
+        fprintf(stdout_file, "Unable to load %s: %s\n", avisynth_module_name, load_error.c_str());
         return 9;
     }
-    CreateScriptEnvironment_t create_script_env = (CreateScriptEnvironment_t)GetProcAddress(avisynth_module, "CreateScriptEnvironment");
+    CreateScriptEnvironment_t create_script_env = (CreateScriptEnvironment_t)platform::library_symbol(avisynth_module, "CreateScriptEnvironment");
     if (!create_script_env)
     {
-        fprintf(stdout_file, "%s doesn't contain entry point of CreateScriptEnvironment, code = %lu\n", avisynth_module_name, GetLastError());
+        fprintf(stdout_file, "%s doesn't contain entry point of CreateScriptEnvironment\n", avisynth_module_name);
         return 10;
     }
 
@@ -226,23 +158,18 @@ int main()
         }
         fprintf(stdout_file, SLAVE_OK_FLAG "\n");
         fflush(stdout_file);
-        char dummy_buffer[256];
-        DWORD bytes_read = 0;
-        do
+        // the master closes our stdin when the pipeline is done
+        if (!platform::wait_for_end_of_input(input_error))
         {
-            if (!ReadFile(stdin_handle, dummy_buffer, sizeof(dummy_buffer), &bytes_read, NULL))
-            {
-                fprintf(stdout_file, "ReadFile failed, code = %lu.\n", GetLastError());
-                break;
-            }
-        } while (bytes_read > 0);
+            fprintf(stdout_file, "%s\n", input_error.c_str());
+        }
         fprintf(stdout_file, "Terminating...\n");
         fflush(stdout_file);
 
 #ifndef _DEBUG
         // Sometimes filters have problem on destruction, try to silent them
         if (!has_statement(script, DISABLE_EXIT_HACK_STATEMENT)) {
-            silent_error_messages();
+            platform::suppress_error_dialogs();
         }
 
         // Not sure why slave processes do not exit sometimes... here is another hack
@@ -251,10 +178,8 @@ int main()
     }
     env->DeleteScriptEnvironment();
 
-    // To prevent problems we don't free it, since we are exiting anyways
-    // FreeLibrary(avisynth_module);
-    ExitProcess(0);
-    return 0;
+    // the AviSynth library is not unloaded, to prevent problems: the process ends anyway
+    platform::exit_process(0);
 }
 
 // 2.6+ interface: this one should be filled manually after getting env

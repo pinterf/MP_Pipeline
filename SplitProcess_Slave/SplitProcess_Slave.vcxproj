@@ -288,6 +288,7 @@
     </ClCompile>
     <ClCompile Include="..\AVS_SplitProcess\statement.cpp" />
     <ClCompile Include="..\AVS_SplitProcess\platform_win32.cpp" />
+    <ClCompile Include="..\AVS_SplitProcess\platform_win32_slave.cpp" />
     <ClCompile Include="..\AVS_SplitProcess\trace.cpp" />
   </ItemGroup>
   <ItemGroup>
