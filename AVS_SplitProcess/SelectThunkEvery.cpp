@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #define SELECTTHUNKEVERY_IMPLEMENTATION
 #define SELECTTHUNKEVERY_SIMPLE_MACRO_NAME
 #include "SelectThunkEvery.h"

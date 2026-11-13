@@ -1,6 +1,6 @@
 #define _CRT_NON_CONFORMING_SWPRINTFS
 
-#include "stdafx.h"
+#include "common.h"
 #include "utils.h"
 #include <algorithm>
 

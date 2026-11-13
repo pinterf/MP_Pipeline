@@ -1,6 +1,6 @@
 #define MP_PIPELINE_IMPLEMENTATION
 
-#include "stdafx.h"
+#include "common.h"
 #include "MP_Pipeline.h"
 #include "slave_common.h"
 #include "statement.h"

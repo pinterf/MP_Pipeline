@@ -1,7 +1,7 @@
 #define UNICODE
 #define _UNICODE
 
-#include "stdafx.h"
+#include "common.h"
 #include "CondVar.h"
 #include "utils.h"
 #include <assert.h>

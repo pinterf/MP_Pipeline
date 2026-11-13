@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 
 #define THUNKEDINTERLEAVE_SIMPLE_MACRO_NAME
 #define THUNKEDINTERLEAVE_IMPLEMENTATION

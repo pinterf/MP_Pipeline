@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "SafeEnv.h"
 #include "Lock.h"
 #include <assert.h>
@@ -9,7 +9,7 @@ enum {
     INITIALIZED
 };
 
-volatile unsigned _initialization_state = UNINITIALIZED;
+volatile LONG _initialization_state = UNINITIALIZED;
 
 CriticalSectionLock* _lock = NULL;
 
@@ -19,7 +19,7 @@ void ensure_initialized()
     {
         while (true)
         {
-            unsigned original_state = InterlockedCompareExchange(&_initialization_state, INITIALIZING, UNINITIALIZED);
+            LONG original_state = InterlockedCompareExchange(&_initialization_state, INITIALIZING, UNINITIALIZED);
             switch (original_state)
             {
             case UNINITIALIZED:

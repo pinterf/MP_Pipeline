@@ -1,7 +1,7 @@
 #define UNICODE
 #define _UNICODE
 
-#include "stdafx.h"
+#include "common.h"
 #include "trace.h"
 
 void _trace(const TCHAR *format, ...)

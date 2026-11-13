@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "MP_Pipeline.h"
 #include "SelectThunkEvery.h"
 #include "ThunkedInterleave.h"

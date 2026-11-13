@@ -1,7 +1,7 @@
 // AVS_SplitProcess.cpp : Defines the entry point for the console application.
 //
 
-#include "stdafx.h"
+#include "common.h"
 #include <string.h>
 #include "avisynth.h"
 #include "splitprocess.h"

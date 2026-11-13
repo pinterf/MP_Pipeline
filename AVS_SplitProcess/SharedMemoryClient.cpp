@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #define SHAREDMEMORYCLIENT_SIMPLE_MACRO_NAME
 #define SHAREDMEMORYCLIENT_IMPLEMENTATION
 #include "SharedMemoryClient.h"

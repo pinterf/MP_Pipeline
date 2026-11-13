@@ -1,7 +1,7 @@
 #define UNICODE
 #define _UNICODE
 
-#include "stdafx.h"
+#include "common.h"
 #include "SharedMemoryCommon.h"
 
 #include <stdio.h>
@@ -272,7 +272,7 @@ void SharedMemorySourceManager::init_client(const SYSCHAR* mapping_name)
     for (int i = 0; i < MAX_SLAVES; i++)
     {
         volatile DWORD& slot_reference = header->client_process_ids[i];
-        if (InterlockedCompareExchange(&slot_reference, process_id, 0) == 0)
+        if (InterlockedCompareExchange((volatile LONG*)&slot_reference, (LONG)process_id, 0) == 0)
         {
             break;
         }

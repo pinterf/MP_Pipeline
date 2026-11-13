@@ -333,9 +333,8 @@
     <ClInclude Include="MP_Pipeline.h" />
     <ClInclude Include="slave_common.h" />
     <ClInclude Include="splitprocess.h" />
-    <ClInclude Include="stdafx.h" />
+    <ClInclude Include="common.h" />
     <ClInclude Include="SystemChar.h" />
-    <ClInclude Include="targetver.h" />
     <ClInclude Include="PropsChannel.h" />
     <ClInclude Include="ThunkedInterleave.h" />
     <ClInclude Include="TwoSidedLock.h" />
@@ -357,7 +356,6 @@
     <ClCompile Include="slave_common.cpp" />
     <ClCompile Include="SpinLock.cpp" />
     <ClCompile Include="statement.cpp" />
-    <ClCompile Include="stdafx.cpp" />
     <ClCompile Include="PropsChannel.cpp" />
     <ClCompile Include="ThunkedInterleave.cpp" />
     <ClCompile Include="TwoSidedLock.cpp" />

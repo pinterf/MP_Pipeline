@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "SpinLock.h"
 
 int _processor_count = 0;

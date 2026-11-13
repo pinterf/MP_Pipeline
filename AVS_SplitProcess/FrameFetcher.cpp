@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "FrameFetcher.h"
 
 // #define ENABLE_TRACING
