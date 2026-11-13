@@ -4,6 +4,7 @@
 #include <atomic>
 #include <mutex>
 #include "Handle.h"
+#include "LocalEvent.h"
 
 #include <Windows.h>
 #include <deque>
@@ -88,6 +89,8 @@ private:
 
     int _worker_cpu;
     std::thread _worker_thread;
-    OwnedEventHandle _worker_workitem_completed_event;
-    OwnedEventHandle _worker_waiting_for_work_event;
+    // manual reset: every thread waiting for a work item is released when it is signaled
+    LocalEvent _worker_workitem_completed_event;
+    // auto reset: wakes the worker
+    LocalEvent _worker_waiting_for_work_event;
 };

@@ -325,6 +325,7 @@
     <ClInclude Include="FrameFetcher.h" />
     <ClInclude Include="FrameProps.h" />
     <ClInclude Include="Handle.h" />
+    <ClInclude Include="LocalEvent.h" />
     <ClInclude Include="NonCopyableClassBase.h" />
     <ClInclude Include="SafeEnv.h" />
     <ClInclude Include="SelectThunkEvery.h" />

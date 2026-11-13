@@ -12,11 +12,7 @@
 
 using namespace std;
 
-void wait_and_reset_event(OwnedEventHandle& event)
-{
-    event.wait();
-    event.reset();
-}
+
 
 
 unsigned FrameFetcher::thread_proc()
@@ -125,7 +121,7 @@ unsigned FrameFetcher::thread_proc()
 void FrameFetcher::work_item_completed(DWORD wait_time)
 {
     _worker_workitem_completed_event.set();
-    _worker_waiting_for_work_event.wait(wait_time);
+    _worker_waiting_for_work_event.wait(wait_time == INFINITE ? LocalEvent::WAIT_INFINITE : (unsigned)wait_time);
 }
 
 void FrameFetcher::fetch_frame(ClipInfo& clip, int n)
@@ -257,7 +253,7 @@ void FrameFetcher::invoke_in_worker_thread(function<void (void)> func)
 
 void FrameFetcher::wait_for_work_item_complete()
 {
-    wait_and_reset_event(_worker_workitem_completed_event);
+    _worker_workitem_completed_event.wait_and_reset();
 }
 
 bool FrameFetcher::is_valid_clip_index(int index)
@@ -353,8 +349,8 @@ FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_
       _lock(),
       _worker_callback(),
       _worker_cpu(worker_cpu),
-      _worker_workitem_completed_event(CreateEvent(NULL, TRUE, FALSE, NULL)), // needs to be manual reset, since we want all threads waiting on this event to be released when it is signaled
-      _worker_waiting_for_work_event(CreateEvent(NULL, FALSE, FALSE, NULL)),
+      _worker_workitem_completed_event(true),
+      _worker_waiting_for_work_event(false),
       new_frame_in_cache_event(CreateEvent(NULL, TRUE, FALSE, NULL)),
       _shutdown(false)
 {
@@ -370,7 +366,7 @@ FrameFetcher::FrameFetcher(const PClip clips[], int max_cache_frames, int cache_
 
     memset(&_fetch_info, 0, sizeof(_fetch_info));
 
-    if (!_worker_workitem_completed_event.is_valid() || !_worker_waiting_for_work_event.is_valid())
+    if (!new_frame_in_cache_event.is_valid())
     {
         env->ThrowError("FrameFetcher: Unable to create event.");
     }
