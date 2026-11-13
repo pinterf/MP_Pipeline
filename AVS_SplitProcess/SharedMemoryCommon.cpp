@@ -70,7 +70,12 @@ sys_string get_shared_memory_key(const char* key1, int key2)
     {
         throw invalid_argument("key1 is too long.");
     }
-    return ascii_to_sys(std::string("SharedMemorySource_") + key1 + "_" + std::to_string(key2));
+    return get_shared_memory_key_prefix(key1) + ascii_to_sys(std::to_string(key2));
+}
+
+sys_string get_shared_memory_key_prefix(const char* key1)
+{
+    return ascii_to_sys(std::string("SharedMemorySource_") + key1 + "_");
 }
 
 int get_response_index(int frame_number)
@@ -176,7 +181,7 @@ void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int cli
         break;
     case platform::SharedMapping::ALREADY_EXISTS:
         throw runtime_error("The file mapping object already exists.");
-    case platform::SharedMapping::MAP_FAILED:
+    case platform::SharedMapping::VIEW_FAILED:
         assert(false);
         throw runtime_error("MapViewOfFile failed.");
     default:
@@ -252,7 +257,7 @@ void SharedMemorySourceManager::init_client(const SYSCHAR* mapping_name)
     {
     case platform::SharedMapping::OK:
         break;
-    case platform::SharedMapping::MAP_FAILED:
+    case platform::SharedMapping::VIEW_FAILED:
         assert(false);
         throw runtime_error("MapViewOfFile failed.");
     default:

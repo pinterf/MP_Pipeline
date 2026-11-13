@@ -178,4 +178,9 @@ void exit_process(int exit_code)
     ExitProcess((UINT)exit_code);
 }
 
+void exit_when_master_ends()
+{
+    // the master's job object (kill-on-close) kills the slave
+}
+
 } // namespace platform

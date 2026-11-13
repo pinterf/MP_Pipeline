@@ -54,7 +54,7 @@ public:
 private:
 
     template<bool is_sleep_lock>
-    int __inline try_lock_impl(int spin_count)
+    inline int try_lock_impl(int spin_count)
     {
         assert(spin_count >= 0);
 

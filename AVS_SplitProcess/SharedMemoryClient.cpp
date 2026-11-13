@@ -297,7 +297,7 @@ int SharedMemoryClient::SetCacheHints(int cachehints,int frame_range)
   return 0;
 }
 
-void SharedMemoryClient::GetAudio(void* buf, __int64 start, __int64 count, IScriptEnvironment* env)
+void SharedMemoryClient::GetAudio(void* buf, int64_t start, int64_t count, IScriptEnvironment* env)
 {
     // this shouldn't be called since we disabled audio
     assert(false);

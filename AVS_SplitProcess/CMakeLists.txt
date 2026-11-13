@@ -1,5 +1,10 @@
-set(PluginName "MP_Pipeline")
-# the slave executable sits next to the plugin: <plugin file name>.slave.exe
+if(WIN32)
+  set(PluginName "MP_Pipeline")
+else()
+  # lowercase, as the AviSynth+ plugins on Linux: libmp_pipeline.so
+  set(PluginName "mp_pipeline")
+endif()
+# the slave executable sits next to the plugin: <plugin file name>.slave.exe / .slave
 set(SlaveName "${PluginName}_slave")
 
 include("Files.cmake")
@@ -18,24 +23,38 @@ else()
 endif()
 
 # --- the plugin ---------------------------------------------------------------------------------
-add_library(${PluginName} SHARED ${MP_Pipeline_Sources} "lib.def")
-
+add_library(${PluginName} SHARED ${MP_Pipeline_Sources})
 set_target_properties(${PluginName} PROPERTIES "OUTPUT_NAME" "${PluginName}")
-if(MINGW)
-  set_target_properties(${PluginName} PROPERTIES PREFIX "")
-  set_target_properties(${PluginName} PROPERTIES IMPORT_PREFIX "")
-endif()
-target_link_libraries(${PluginName} PRIVATE rpcrt4)
 
 # --- the slave process --------------------------------------------------------------------------
 add_executable(${SlaveName} ${MP_Pipeline_Slave_Sources})
-set_target_properties(${SlaveName} PROPERTIES "OUTPUT_NAME" "${PluginName}.dll.slave")
-target_link_libraries(${SlaveName} PRIVATE psapi rpcrt4)
 
-# version resources
-enable_language(RC)
-target_sources(${PluginName} PRIVATE "AVS_SplitProcess.rc")
-target_sources(${SlaveName} PRIVATE "SplitProcess_Slave.rc")
+if(WIN32)
+  if(MINGW)
+    set_target_properties(${PluginName} PROPERTIES PREFIX "")
+    set_target_properties(${PluginName} PROPERTIES IMPORT_PREFIX "")
+  endif()
+  target_sources(${PluginName} PRIVATE "lib.def")
+  target_link_libraries(${PluginName} PRIVATE rpcrt4)
+  set_target_properties(${SlaveName} PROPERTIES "OUTPUT_NAME" "${PluginName}.dll.slave")
+  target_link_libraries(${SlaveName} PRIVATE psapi rpcrt4)
+
+  # version resources
+  enable_language(RC)
+  target_sources(${PluginName} PRIVATE "AVS_SplitProcess.rc")
+  target_sources(${SlaveName} PRIVATE "SplitProcess_Slave.rc")
+else()
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+  find_package(Threads REQUIRED)
+  # only AvisynthPluginInit3 is exported: the plugin's symbols must not bind to another plugin's
+  set_target_properties(${PluginName} PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+  set_target_properties(${SlaveName} PROPERTIES "OUTPUT_NAME"
+    "${CMAKE_SHARED_LIBRARY_PREFIX}${PluginName}${CMAKE_SHARED_LIBRARY_SUFFIX}.slave")
+  foreach(target ${PluginName} ${SlaveName})
+    # shm_open is in librt before glibc 2.34
+    target_link_libraries(${target} PRIVATE Threads::Threads ${CMAKE_DL_LIBS} rt)
+  endforeach()
+endif()
 
 foreach(target ${PluginName} ${SlaveName})
   target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -66,5 +85,19 @@ foreach(FILE ${MP_Pipeline_Sources})
   source_group("${GROUP}" FILES "${FILE}")
 endforeach()
 
-install(TARGETS ${PluginName} ${SlaveName}
-        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+if(WIN32)
+  install(TARGETS ${PluginName} ${SlaveName}
+          RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+else()
+  # the slave next to the plugin, in the AviSynth+ plugin folder
+  install(TARGETS ${PluginName} ${SlaveName}
+          LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/avisynth"
+          RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}/avisynth")
+endif()
+
+# --- the test host (Linux): loads a script and requests every frame, for run_tests.sh ----------
+if(MPP_BUILD_TESTS AND NOT WIN32)
+  add_executable(avs_run "${CMAKE_CURRENT_SOURCE_DIR}/../tests/Pipeline/avs_run.cpp")
+  target_include_directories(avs_run PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(avs_run PRIVATE ${CMAKE_DL_LIBS})
+endif()

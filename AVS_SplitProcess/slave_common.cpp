@@ -41,7 +41,7 @@ static std::unique_ptr<platform::ChildInput> create_slave_process(slave_create_p
     {
         return fail("Unable to get path of slave executable.");
     }
-    const std::string suffix = platform_file_suffix(params->slave_platform) + ".slave.exe";
+    const std::string suffix = platform_file_suffix(params->slave_platform) + platform::slave_executable_suffix();
     slave_exec += sys_string(suffix.begin(), suffix.end()); // ASCII
     if (!platform::file_exists(slave_exec))
     {

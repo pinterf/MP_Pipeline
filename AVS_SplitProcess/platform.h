@@ -1,8 +1,9 @@
 #pragma once
 
 // The operating system services MP_Pipeline uses, behind a portable interface.
-// Implementation: platform_win32.cpp (Windows XP and later). A POSIX implementation is planned,
-// see LINUX_PORT_PLAN.md. No Windows header here: the rest of the code calls only these.
+// Implementations: platform_win32.cpp + platform_win32_slave.cpp (Windows XP and later),
+// platform_posix.cpp + platform_posix_slave.cpp (Linux). No system header here: the rest of the
+// code calls only these. See LINUX_PORT_PLAN.md.
 
 
 #include <stdint.h>
@@ -63,13 +64,27 @@ bool file_exists(const sys_string& path);
 // Reads a variable of this process' environment; false when it is not set. The narrow version
 // uses the process' ANSI code page (Windows), the wide one is exact.
 bool get_environment_variable(const char* name, std::string& value);
+#ifdef _WIN32
 bool get_environment_variable(const SYSCHAR* name, sys_string& value);
+#endif
 
 // Sets a variable in the environment of this process (value NULL: removes it); the child
 // processes started afterwards inherit it. The narrow version uses the process' ANSI code page
 // (Windows), the wide one is exact.
 bool set_environment_variable(const char* name, const char* value);
+#ifdef _WIN32
+// elsewhere SYSCHAR is char: the narrow version above
 bool set_environment_variable(const SYSCHAR* name, const SYSCHAR* value);
+#endif
+
+// the end of the slave executable's file name, after the plugin's: ".slave.exe" / ".slave"
+const char* slave_executable_suffix();
+
+// the AviSynth library a slave loads when its block has no "### dll:" statement
+const char* default_avisynth_library();
+
+// "### platform:" (a slave of the other bitness) is available: Windows only
+bool supports_other_platforms();
 
 // --- child processes (the slaves) --------------------------------------------------------------
 
@@ -159,6 +174,15 @@ void suppress_error_dialogs();
 // ends the process at once (no destructors, no atexit handlers)
 [[noreturn]] void exit_process(int exit_code);
 
+// Ends the slave when the master process ends unexpectedly, while the slave is still working
+// (before the end of its input). Windows: nothing to do, the master's job object kills it.
+void exit_when_master_ends();
+
+// Removes the named objects (events, shared memory) whose names start with prefix: what slaves
+// killed before their cleanup left behind. Windows: nothing to do, the system removes an object
+// with its last handle. POSIX: the names in /dev/shm; mapped views stay valid.
+void remove_named_objects(const sys_string& prefix);
+
 // --- named events (between processes) ----------------------------------------------------------
 
 // Like a Win32 event object: manual reset (set() releases every waiter, stays signaled until
@@ -192,7 +216,7 @@ public:
         ALREADY_EXISTS, // create: the name is in use
         NOT_FOUND,      // open: no mapping with the name
         FAILED,         // could not create (e.g. out of memory)
-        MAP_FAILED      // created / opened, but not mapped (e.g. out of address space)
+        VIEW_FAILED      // created / opened, but not mapped (e.g. out of address space)
     };
 
     SharedMapping();
@@ -211,6 +235,9 @@ public:
 private:
     void* _handle;
     uint8_t* _view;
+    uint64_t _size;  // POSIX: for munmap
+    bool _owner;     // POSIX: the creator removes the name when closing
+    sys_string _name;
 };
 
 } // namespace platform

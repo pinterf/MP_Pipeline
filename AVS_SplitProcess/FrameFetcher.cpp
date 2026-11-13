@@ -111,7 +111,7 @@ unsigned FrameFetcher::thread_proc()
             work_item_completed(1);
         }
     } catch (...) {
-        __debugbreak();
+        assert(false);
         throw;
     }
     return 0;
@@ -275,7 +275,7 @@ bool FrameFetcher::GetParity(int clip_index, int n)
     return result;
 }
 
-void FrameFetcher::GetAudio(int clip_index, void* buf, __int64 start, __int64 count, IScriptEnvironment* env)
+void FrameFetcher::GetAudio(int clip_index, void* buf, int64_t start, int64_t count, IScriptEnvironment* env)
 {
     assert(env == _env);
     assert(clip_index >= 0 && clip_index < (int)_clips.size());

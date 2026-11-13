@@ -224,6 +224,8 @@ public:
 
 // provide compatibility with TCPDeliver
 sys_string get_shared_memory_key(const char* key1, int key2);
+// the start of every key (and object name) of an MP_Pipeline instance: key1 is its instance id
+sys_string get_shared_memory_key_prefix(const char* key1);
 
 int get_response_index(int frame_number);
 

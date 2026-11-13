@@ -84,6 +84,7 @@ int main()
         // nothing to report the problem to: the master sees the exit code
         return 8;
     }
+    platform::exit_when_master_ends();
     std::string script_text;
     if (!platform::get_environment_variable(SCRIPT_VAR_NAME_A, script_text))
     {
@@ -102,7 +103,7 @@ int main()
         fprintf(stdout_file, "%s\n", input_error.c_str());
         return 5;
     }
-    const char* avisynth_module_name = "avisynth.dll"; // Default
+    const char* avisynth_module_name = platform::default_avisynth_library();
     scan_statement(script, DLL_STATEMENT_START DLL_STATEMENT_PARAM, NULL,
         NULL, &avisynth_module_name,
         NULL, NULL

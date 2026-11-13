@@ -112,7 +112,7 @@ void PropsWriter::reallocate(size_t capacity, props_slot_state_t& state)
         break;
     case platform::SharedMapping::ALREADY_EXISTS:
         throw std::runtime_error("Frame property mapping already exists.");
-    case platform::SharedMapping::MAP_FAILED:
+    case platform::SharedMapping::VIEW_FAILED:
         throw std::runtime_error("Unable to map frame property mapping (out of address space?).");
     default:
         throw std::runtime_error("Unable to create frame property mapping (out of memory?).");
@@ -254,7 +254,7 @@ void PropsReader::read(IScriptEnvironment* env, const FramePropsCaps& caps, PVid
             {
             case platform::SharedMapping::OK:
                 break;
-            case platform::SharedMapping::MAP_FAILED:
+            case platform::SharedMapping::VIEW_FAILED:
                 throw std::runtime_error("Unable to map frame property mapping (out of address space?).");
             default:
                 throw std::runtime_error("Unable to open frame property mapping.");

@@ -27,21 +27,17 @@ inline bool streqi(const char* s1, const char* s2)
 }
 
 
-#ifdef _M_X64
-typedef __int64 NATIVE_INT;
-#else
-typedef int NATIVE_INT;
-#endif
+
 
 #define CACHE_LINE_SIZE 64
 
 template <typename T>
-static T __inline aligned(T size, int alignment = CACHE_LINE_SIZE)
+static inline T aligned(T size, int alignment = CACHE_LINE_SIZE)
 {
     // ensure alignment is power of 2
     assert(alignment > 0 && (alignment & (alignment - 1)) == 0);
 
-    return (T)(((NATIVE_INT)size + (alignment - 1)) & ~(alignment - 1));
+    return (T)(((intptr_t)size + (alignment - 1)) & ~(intptr_t)(alignment - 1));
 }
 
 void copy_plane(unsigned char* dst, int dst_pitch, PVideoFrame& frame, const VideoInfo& vi, int plane);

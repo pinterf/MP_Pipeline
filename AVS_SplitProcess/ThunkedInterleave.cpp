@@ -89,7 +89,7 @@ ThunkedInterleave::ThunkedInterleave(const ThunkedInterleave_parameter_storage_t
     _vi.MulDivFPS(_clip_count, 1);
 }
 
-void __stdcall ThunkedInterleave::GetAudio(void* buf, __int64 start, __int64 count, IScriptEnvironment* env)
+void __stdcall ThunkedInterleave::GetAudio(void* buf, int64_t start, int64_t count, IScriptEnvironment* env)
 {
     // this shouldn't be called since we have disabled audio in the constructor
     assert(false);

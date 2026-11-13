@@ -50,7 +50,7 @@ public:
     
     PVideoFrame GetFrame(int clip_index, int n, IScriptEnvironment* env);
     bool GetParity(int clip_index, int n);
-    void GetAudio(int clip_index, void* buf, __int64 start, __int64 count, IScriptEnvironment* env);
+    void GetAudio(int clip_index, void* buf, int64_t start, int64_t count, IScriptEnvironment* env);
     const VideoInfo& GetVideoInfo(int clip_index);
 
     PVideoFrame try_get_frame_from_cache(int clip_index, int n);

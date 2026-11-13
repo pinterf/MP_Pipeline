@@ -13,7 +13,7 @@ bool scan_statement_impl(const char* script, const char* regex_pattern, const ch
         *statement_pos_out = NULL;
     }
 
-    regex re(regex_pattern, regex::ECMAScript | regex::icase);
+    regex re = make_line_regex(regex_pattern, true);
     cmatch m;
     if (!regex_search(script, m, re))
     {
@@ -75,7 +75,7 @@ bool has_statement(const char* script, const char* regex_pattern)
 
 int count_statements(const char* script, const char* regex_pattern)
 {
-    regex re(regex_pattern, regex::ECMAScript | regex::icase);
+    regex re = make_line_regex(regex_pattern, true);
     auto begin = cregex_iterator(script, script + strlen(script), re);
     return (int)distance(begin, cregex_iterator());
 }

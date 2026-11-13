@@ -15,6 +15,7 @@
 #include <algorithm>
 
 #include "platform.h"
+#include "SharedMemoryCommon.h"
 
 #define BRANCH_STATEMENT_START "^\\s*### branch:"
 #define BRANCH_STATEMENT_PARAM "\\s*(\\d+)(?:\\s*,\\s*(\\d{1,7}))?\\s*$"
@@ -88,6 +89,9 @@ MP_Pipeline::~MP_Pipeline()
         _slaves->set_kill_on_destroy(_always_kill_children);
         _slaves.reset();
     }
+    // POSIX: the names of what a killed slave could not remove (the running slaves have their
+    // objects mapped, removing the names does not disturb them)
+    platform::remove_named_objects(get_shared_memory_key_prefix(_instance_id));
 }
 
 void add_load_plugin_function(char* script, const char* platform, IScriptEnvironment* env)
@@ -150,7 +154,7 @@ void process_pass_clip_statement(char* script, char* next_script, IScriptEnviron
             strcpy(pattern, "^.*");
             append_import_clip_signature(pattern, clip_var_name);
             strcat(pattern, "$");
-            regex re(pattern, regex::ECMAScript);
+            regex re = make_line_regex(pattern, false);
             free(pattern);
             pattern = NULL;
 
@@ -224,6 +228,10 @@ void MP_Pipeline::prepare_slave(slave_create_params* params, IScriptEnvironment*
 {
     params->slave_group = _slaves.get();
     scan_statement(params->script, PLATFORM_PATTERN, NULL, PLATFORM_SCAN_FORMAT, params->slave_platform);
+    if (params->slave_platform[0] && !platform::supports_other_platforms())
+    {
+        env->ThrowError("MP_Pipeline: \"### platform: %s\": slaves of another platform are supported on Windows only", params->slave_platform);
+    }
 
     sprintf_append(params->script, "MPP_SharedMemoryServer(\"%s\", %s()", _instance_id, GET_OUTPUT_PORT_FUNCTION_NAME);
 
@@ -469,6 +477,7 @@ void MP_Pipeline::create_pipeline(IScriptEnvironment* env)
             // Some error happened, terminate all slave processes
             _slaves.reset();
             _slave_inputs.clear();
+            platform::remove_named_objects(get_shared_memory_key_prefix(_instance_id));
         }
         free(buffer_store);
     });

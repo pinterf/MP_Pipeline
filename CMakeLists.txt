@@ -1,22 +1,27 @@
-# MP_Pipeline CMake build: MinGW (GCC, Clang, llvm-mingw), also cross-compiled (Windows on ARM64).
+# MP_Pipeline CMake build: MinGW (GCC, Clang, llvm-mingw), also cross-compiled (Windows on ARM64),
+# and Linux (GCC, Clang).
 # MSVC uses the solution: AVS_SplitProcess.sln (Release: Visual Studio 2026, ReleaseXP: Visual Studio 2022).
-# Windows only: Windows processes, shared memory and events.
 #
 # Examples:
-#   cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release        (MSYS2 MinGW x64 / x86 shell)
+#   cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release        (MSYS2 MinGW x64 / x86 shell, Linux)
 #   build_arm64_mingw.bat                                          (Windows on ARM64, llvm-mingw)
+#   -DMPP_BUILD_TESTS=ON: also the test host for tests/Pipeline/run_tests.sh (Linux)
 #
-# Output: MP_Pipeline.dll and MP_Pipeline.dll.slave.exe of one platform. A release folder also
-# needs the other bitness pair (MP_Pipeline.dll.win32 / .win64 and the .slave.exe of that) for
+# Output, Windows: MP_Pipeline.dll and MP_Pipeline.dll.slave.exe of one platform. A release folder
+# also needs the other bitness pair (MP_Pipeline.dll.win32 / .win64 and the .slave.exe of that) for
 # the "### platform" blocks; build_release.bat assembles the folders.
+# Output, Linux: libmp_pipeline.so and libmp_pipeline.so.slave, installed together into
+# <prefix>/lib/avisynth (the slave is found next to the plugin). No "### platform" there.
 cmake_minimum_required(VERSION 3.16...3.31)
 
 project("MP_Pipeline" LANGUAGES CXX)
 include(GNUInstallDirs)
 
-if(NOT WIN32)
-  message(FATAL_ERROR "MP_Pipeline is Windows only (Windows processes, shared memory and events).")
+if(NOT WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "MP_Pipeline builds for Windows and Linux (platform_win32 / platform_posix).")
 endif()
+
+option(MPP_BUILD_TESTS "Build the test host for tests/Pipeline/run_tests.sh (Linux)" OFF)
 
 # Avoid uselessly linking to unused libraries
 set(CMAKE_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
@@ -39,9 +44,14 @@ if(MSVC)
   message(FATAL_ERROR "Use AVS_SplitProcess.sln for the MSVC builds (Release: Visual Studio 2026, ReleaseXP: Visual Studio 2022).")
 endif()
 
-add_compile_definitions(WIN32 _CONSOLE _CRT_SECURE_NO_WARNINGS)
-# 32 bit: lib.def exports the undecorated AvisynthPluginInit3 for the __stdcall AvisynthPluginInit3@8
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--enable-stdcall-fixup")
+if(WIN32)
+  add_compile_definitions(WIN32 _CONSOLE _CRT_SECURE_NO_WARNINGS)
+  # 32 bit: lib.def exports the undecorated AvisynthPluginInit3 for the __stdcall AvisynthPluginInit3@8
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--enable-stdcall-fixup")
+else()
+  # make sure there are no undefined symbols
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined")
+endif()
 
 add_subdirectory("AVS_SplitProcess")
 

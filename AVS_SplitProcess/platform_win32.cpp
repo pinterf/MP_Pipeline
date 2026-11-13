@@ -195,6 +195,21 @@ bool get_environment_variable(const SYSCHAR* name, sys_string& value)
     return true;
 }
 
+const char* slave_executable_suffix()
+{
+    return ".slave.exe";
+}
+
+const char* default_avisynth_library()
+{
+    return "avisynth.dll";
+}
+
+bool supports_other_platforms()
+{
+    return true;
+}
+
 bool set_environment_variable(const char* name, const char* value)
 {
     return SetEnvironmentVariableA(name, value) != 0;
@@ -387,6 +402,11 @@ std::unique_ptr<ChildInput> ChildProcess::take_input()
     return input;
 }
 
+void remove_named_objects(const sys_string&)
+{
+    // the system removes a named object with its last handle
+}
+
 // --- named events ------------------------------------------------------------------------------
 
 NamedEvent::NamedEvent(const sys_string& name, bool create, bool manual_reset, bool initially_set) :
@@ -441,7 +461,7 @@ bool NamedEvent::wait(unsigned ms_timeout)
 
 // --- named shared memory -----------------------------------------------------------------------
 
-SharedMapping::SharedMapping() : _handle(NULL), _view(nullptr)
+SharedMapping::SharedMapping() : _handle(NULL), _view(nullptr), _size(0), _owner(false)
 {
 }
 
@@ -484,7 +504,7 @@ SharedMapping::Result SharedMapping::create(const sys_string& name, uint64_t siz
     if (!_view)
     {
         close();
-        return MAP_FAILED;
+        return VIEW_FAILED;
     }
     return OK;
 }
@@ -502,7 +522,7 @@ SharedMapping::Result SharedMapping::open(const sys_string& name, bool writable)
     if (!_view)
     {
         close();
-        return MAP_FAILED;
+        return VIEW_FAILED;
     }
     return OK;
 }
