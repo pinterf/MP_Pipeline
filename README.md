@@ -1,35 +1,94 @@
 # MP_Pipeline
 
-Plugin for Avisynth
+MP_Pipeline splits an AviSynth script into blocks that run in separate processes. The frames travel
+between the processes through shared memory; the last block of the script runs in the process that
+calls MP_Pipeline (the host).
 
-Copy files from x86 (or x86_xp) folder to the plugins directory for 32 bits plugins
-Copy files from x64 (or x64_xp) folder to the plugins directory for 64 bits plugins
-Keep all four files of a folder together: MP_Pipeline.dll and MP_Pipeline.dll.slave.exe, and
-the other bitness pair (.win64 / .win32 files) used by "### platform" blocks of the other bitness.
-Mixed bitness needs both the 32 and 64 bit AviSynth to be installed.
-The _xp builds run on Windows XP as well (Visual C++ v141_xp toolset).
-Runtime: Microsoft Visual C++ 2015-2022 Redistributable, 14.44 or newer (on Windows 7: 14.44.35211,
-the last version installing there, the same as AviSynth+ needs). The _xp builds need the last XP
-compatible one on XP, 14.27.29114 (14.28.29213 was reported to work too).
+Typical uses:
+- Parallel processing: "### branch" runs a block in several processes, "### prefetch" lets a block
+  work ahead of the frame requests.
+- Mixed bitness: a 32 bit filter in a 64 bit host, or the other way round ("### platform", Windows x86 / x64).
+- A different AviSynth version for a block ("### dll").
 
-MP_Pipeline 2.0
+Works with AviSynth+ and AviSynth 2.6 (classic). Platforms: Windows x86, x64 and ARM64, Linux x86-64.
+Current version: 2.0, see the change log below.
 
-Frame properties (AviSynth+)
+## Contents
 
-Frame properties are passed between the processes (also between win32 and win64), when
-both sides run AviSynth+ with frame property support (interface version 8 or later).
-Integer, float and string/data properties (also arrays) are passed; clip and frame
-typed properties are skipped. "### frame props: off" in a block switches it off for the
-frames leaving that block.
-See Documentation/MP_Pipeline_readme_avsplus.avs and MP_Pipeline_frameprops_demo.avs.
+- [Installation](#installation)
+- [Usage and statements](#usage-and-statements)
+- [Frame properties and pixel formats](#frame-properties-and-pixel-formats)
+- [Building](#building)
+- [Tests](#tests)
+- [Change log](#change-log)
+- [Links and license](#links-and-license)
 
-Tests: tests/Pipeline/run_tests.ps1 (AVSMeter based pipeline tests), on Linux
-tests/Pipeline/run_tests.sh (with the avs_run test host, cmake -DMPP_BUILD_TESTS=ON), and
-tests/FrameProps (serializer unit test), see the comments in the files.
+## Installation
 
-Build:
+Windows x86 / x64:
+- Copy the files of the x86 (or x86_xp) folder to the plugin folder of the 32 bit AviSynth, the files of
+  the x64 (or x64_xp) folder to the plugin folder of the 64 bit AviSynth.
+- Keep all four files of a folder together: MP_Pipeline.dll and MP_Pipeline.dll.slave.exe, and the pair of
+  the other bitness (MP_Pipeline.dll.win64 / .win32 and its .slave.exe), which the "### platform" blocks
+  of the other bitness use.
+- Mixed bitness needs both the 32 and the 64 bit AviSynth to be installed.
+- The _xp builds run on Windows XP as well (Visual C++ v141_xp toolset).
+- Runtime of the Visual Studio builds: Microsoft Visual C++ 2015-2022 Redistributable, 14.44 or newer
+  (on Windows 7: 14.44.35211, the last version installing there, the same as AviSynth+ needs). The _xp
+  builds need the last XP compatible one on XP, 14.27.29114 (14.28.29213 was reported to work too).
+
+Windows on ARM64: MP_Pipeline.dll and MP_Pipeline.dll.slave.exe of the ARM64 build (llvm-mingw, built
+by build_arm64_mingw.bat) next to each other in the plugin folder of the ARM64 AviSynth+. There is no
+other bitness pair, "### platform:" is ignored.
+
+Linux: libmp_pipeline.so and libmp_pipeline.so.slave next to each other in the AviSynth+ plugin folder
+(cmake --install puts them into lib/avisynth), see Building.
+
+## Usage and statements
+
+```
+LoadPlugin("MP_Pipeline.dll")  # not needed in an autoload folder
+MP_Pipeline("""
+ColorBars().ConvertToYV12().Trim(0, 999)
+### prefetch: 5, 2
+### ###
+Blur(1.0)
+""")
+```
+
+The line "### ###" ends a block. Every block but the last runs in its own slave process, the last one
+runs in the host. A block starts with the last clip of the previous one (`last`); other clips are
+handed over with "### export clip" and "### pass clip".
+
+| Statement | What it does |
+| --- | --- |
+| `### ###` | Ends a block (the splitter line). |
+| `### branch: n[, thunk size]` | Runs the block in n processes, each one produces a share of the frames. For spatial filters. |
+| `### prefetch: max frames, frames behind` | The block works ahead of the requests, caching up to max frames. |
+| `### export clip: a, b` | Makes clip variables (max. 8) of the block available in the next block. |
+| `### pass clip: a` | Passes a clip received from upstream on: it is available in the next block as well. |
+| `### platform: win32\|win64` | Runs the block in a slave of that bitness. Windows x86 / x64 only, ignored on ARM64 and Linux (a native slave). |
+| `### dll: path` | The avisynth.dll (libavisynth.so) the block runs with. |
+| `### inherit start ###` ... `### inherit end ###` | Copies the lines between them into all downstream blocks, e.g. LoadPlugin calls. |
+| `### frame props: on\|off` | Passes the frame properties downstream or not (default: on). |
+| `### setmtmode: a, b` | SetMTMode(a, b) in the block (AviSynth 2.6 classic MT). |
+| `### lock threads to cores` | Accepted and ignored since 2.0. |
+
+Every statement is described, with a full example script, in Documentation/MP_Pipeline_readme_avsplus.avs
+(and MP_Pipeline_readme_avs26.avs for AviSynth 2.6).
+
+## Frame properties and pixel formats
+
+With AviSynth+ the frame properties travel with the frames (also between win32 and win64), and all pixel
+formats can be passed, including YA, 4:4:0, and 4:1:1 / 4:1:0 of interface V13. The requirements and the
+limits are in the documentation script mentioned above; Documentation/MP_Pipeline_frameprops_demo.avs
+is an example.
+
+## Building
+
 - Visual Studio: AVS_SplitProcess.sln. Release (x86, x64): Visual Studio 2026 (v143 toolset);
   ReleaseXP: Visual Studio 2022 (v141_xp toolset, VS 2026 has none).
+  The Visual Studio build copies the files of the other bitness pair to the other platform's Output folder.
 - CMake (MinGW GCC / Clang, llvm-mingw): CMakeLists.txt, e.g. in an MSYS2 MinGW shell
     cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
     cmake --build build
@@ -38,28 +97,40 @@ Build:
 - Windows on ARM64: build_arm64_mingw.bat, cross-compiled on x64 Windows with llvm-mingw
   (https://github.com/mstorsjo/llvm-mingw, UCRT flavour; set LLVM_MINGW_ROOT), CMake and Ninja.
   Output: out\ARM64\llvm-mingw. The toolchain file is cmake/toolchains/llvm-mingw-aarch64.cmake.
-  "### platform:" is ignored on ARM64 (a native slave), as on Linux.
 - Linux (GCC, Clang): the same CMakeLists.txt
     cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
     cmake --build build && sudo cmake --install build
   Output: libmp_pipeline.so and libmp_pipeline.so.slave, installed together into lib/avisynth (the
-  slave must be next to the plugin). "### platform:" is ignored on Linux (a native slave), "### dll:"
-  takes a libavisynth.so path. Tested on Ubuntu 26.04 (GCC 15, Clang 21, AviSynth+ 3.7.6) and Ubuntu 22.04
-  (GCC 13, AviSynth+ 3.7.5).
-A plugin folder needs the other bitness pair too: MP_Pipeline.dll.win32 / .win64 and its
-.slave.exe (the Visual Studio build copies them to the other platform's Output folder).
+  slave must be next to the plugin). "### dll:" takes a libavisynth.so path. Tested on Ubuntu 26.04
+  (GCC 15, Clang 21, AviSynth+ 3.7.6) and Ubuntu 22.04 (GCC 13, AviSynth+ 3.7.5).
 
-#######################################################
-Change log:
+## Tests
 
-2.0 (20261112) pinterf
+- tests/Pipeline/run_tests.ps1: pipeline tests on Windows (AVSMeter based).
+- tests/Pipeline/run_tests.sh: the same on Linux, with the avs_run test host (cmake -DMPP_BUILD_TESTS=ON).
+- tests/FrameProps: serializer unit test.
+See the comments in the files.
+
+## Change log
+
+2.0 (20261118) pinterf
+In short:
+  - Frame properties are passed between the processes
+  - AviSynth+ interface V13 pixel formats: YA, 4:4:0, 4:1:1 / 4:1:0
+  - Portable source, no longer tied to MSVC: builds with MSVC, ClangCL, GCC and Clang (MinGW, llvm-mingw)
+  - CMake build (CMakeLists.txt) next to the Visual Studio solution: MinGW, llvm-mingw and Linux
+  - Windows on ARM64 (aarch64) build
+  - Linux support (x86-64)
+  - Many stability fixes and clearer error messages
+Details:
 * Frame properties are passed between the processes (AviSynth+, interface V8 or later on both sides),
   also between win32 and win64, with branch, prefetch, export clip and pass clip.
   Integer, float and data properties incl. arrays; the data type hint (binary/UTF-8) is kept when both
   sides have interface V11 or later. Clip and frame typed properties are skipped.
   Up to 4 KB of property data per frame travels with the frame, larger property sets use an extra
   shared memory buffer per frame slot (grows, shrinks and is released on demand), max. 256 MB per frame.
-  MPP_TRACE_PROPS=1 environment variable: reports the extra buffer events with OutputDebugString.
+  MPP_TRACE_PROPS=1 environment variable: reports the extra buffer events with OutputDebugString
+  (on Linux to stderr).
 * New statement: ### frame props: on|off
   "off" passes the frames of the block without frame properties (default: on).
   (new MPP_SharedMemoryServer parameter: props)
@@ -90,40 +161,39 @@ Change log:
   references, __declspec(align)); builds with ClangCL as well, compiles with MinGW GCC and llvm-mingw
   (x86, x64, aarch64). The shared memory layout is the same with every compiler (compile-time checks).
 * Build: no external libraries. The asmlib memory/string functions (lib/alibcof*.lib) are replaced by
-  the standard ones (today's compilers and runtimes are as fast or faster); the unused AviSynth import
+  the standard ones; the unused AviSynth import
   libraries and the lib folder are removed. Links only system libraries (rpcrt4, psapi).
 * Source: synchronization with standard C++ (std::atomic, std::mutex) instead of the Interlocked
   functions, volatile and critical sections. The spin locks in the shared memory take and release
   with acquire / release ordering: correct with every compiler and CPU (the old volatile store
   relied on MSVC's x86/x64 behavior, a prerequisite for ARM64). The shared memory layout is unchanged.
 * "### lock threads to cores" is accepted and ignored: no more thread pinning, the operating system
-  schedules the threads (pinning rather hurt with today's schedulers, hybrid and many-core CPUs).
+  schedules the threads (better suited to today's hybrid and many-core CPUs).
   The fetcher_thread_lock_to_cpu / server_thread_lock_to_cpu parameters of MPP_SharedMemoryServer
   are ignored as well.
-* Linux support (x86-64, GCC and Clang, AviSynth+ 3.7.5 and 3.7.6): the platform layer has a POSIX implementation
-  (shared memory with shm_open, process-shared robust pthread events, posix_spawn, the slave ends with
-  the master); libmp_pipeline.so with libmp_pipeline.so.slave next to it. "### platform:" is Windows
-  only, ignored on Linux (a native slave: scripts run unchanged). Tests: tests/Pipeline/run_tests.sh
-  with the avs_run test host.
-* Statements are matched line by line with std::regex::multiline where the C++ library has it: the
-  newer MSVC (v145), libstdc++ and libc++ match ^ and $ only at the start and end of the whole text
-  without it (statements were not found there; the v141 / v143 builds were not affected).
-* Build: CMake build for MinGW (GCC, Clang) and llvm-mingw; Windows on ARM64 build (build_arm64_mingw.bat,
-  cross-compiled with llvm-mingw, for the llvm-mingw built ARM64 AviSynth+; "### platform:" is ignored
-  there, a native slave; tests passed on Windows 11 ARM64 with AviSynth+ 3.7.6). A MinGW build needs a MinGW
-  built AviSynth+ in its process (the C++ exceptions of the AviSynth interface differ between MSVC and
+* Linux support (x86-64, GCC and Clang, AviSynth+ 3.7.5 and 3.7.6): the platform layer has a POSIX
+  implementation (shared memory with shm_open, process-shared robust pthread events, posix_spawn, the
+  slave ends with the master); libmp_pipeline.so with libmp_pipeline.so.slave next to it.
+  "### platform:" is Windows x86 / x64 only, ignored on Linux (a native slave: scripts run unchanged).
+  Tests: tests/Pipeline/run_tests.sh with the avs_run test host.
+* Build: CMake build for MinGW (GCC, Clang) and llvm-mingw. A MinGW build needs a MinGW built
+  AviSynth+ in its process (the C++ exceptions of the AviSynth interface differ between MSVC and
   MinGW), the MSVC builds an MSVC built one.
+* Windows on ARM64 build (build_arm64_mingw.bat, cross-compiled with llvm-mingw) for the llvm-mingw
+  built ARM64 AviSynth+. "### platform:" is ignored there (a native slave). Tested on Windows 11 ARM64
+  with AviSynth+ 3.7.6.
 * Documentation: frame properties, pixel formats, ### frame props statement;
   new demo script Documentation/MP_Pipeline_frameprops_demo.avs
 * Tests: tests/Pipeline (AVSMeter based pipeline tests, run_tests.ps1) and tests/FrameProps
   (frame property serializer unit test)
-* Development of this release was assisted by Claude Code (Anthropic, Claude Opus 5.5): code, tests and
-  documentation, based on pinterf's ideas and former test scripts, reviewed by pinterf
+* Development of this release was assisted / co-authored by Claude Code (Anthropic) and occasionally
+  other AIs: code, tests and documentation, based on pinterf's ideas, organization and former test
+  scripts, directed and reviewed by pinterf.
 
 0.23 (20211008) pinterf
 * Adapt to post-3.7.1test17 arrays: named arrays are undefined if they are not given like any other named parameter type.
   Code was explicitely checked for array-ness.
-  (case of MPP_SharedMemoryServer  [aux_clips]c*, becasue Avisynth differs between an explicite zero sized array parameter
+  (case of MPP_SharedMemoryServer  [aux_clips]c*, because Avisynth differs between an explicite zero sized array parameter
    and a not-given parameter. Internally generated MPP script does not pass the parameter by default)
 
 0.22 (20201115) pinterf
@@ -189,20 +259,14 @@ Change log:
 * x86/x64 mixed slave process (requires both x86/x64 version of AviSynth to be installed)
 * Add a script variable in branch slave process, make it distinguishable in script
 
-Web: 
-http://www.nmm-hd.org/newbbs/viewtopic.php?f=7&t=498
-http://forum.doom9.org/showthread.php?t=163281
+## Links and license
 
-Original Source code:
-https://github.com/SAPikachu/MP_Pipeline
-
-Mod:
-https://github.com/pinterf/MP_Pipeline
+- Forum: https://forum.doom9.org/showthread.php?t=163281 and
+  http://www.nmm-hd.org/newbbs/viewtopic.php?f=7&t=498
+- AviSynth wiki: http://avisynth.nl/index.php/MP_Pipeline
+- Original source code: https://github.com/SAPikachu/MP_Pipeline
+- This version: https://github.com/pinterf/MP_Pipeline
 
 Copyleft 2011-2012 SAPikachu (sapikachu@gmail.com, http://www.sapikachu.net)
-Additonal work 2018 realfinder, 2020-21, 2026 by pinterf
+Additional work 2018 realfinder, 2020-21, 2026 by pinterf
 Licensed under GPL (http://www.gnu.org/copyleft/gpl.html).
-
-Links:
-https://forum.doom9.org/showthread.php?t=163281
-http://avisynth.nl/index.php/MP_Pipeline

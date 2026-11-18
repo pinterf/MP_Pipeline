@@ -24,7 +24,7 @@ ConvertToYV12()
 
 ### inherit start ###
 
-# Codes in this block will be copied to all downstream processses (including the main process),
+# Codes in this block will be copied to all downstream processes (including the main process),
 # so you can add LoadPlugin() calls here.
 
 ### inherit end ###
@@ -86,7 +86,7 @@ last
 
 """
 
-Note: This example script is used for demostration only. It is far from optimal. You need to tweak the settings yourself for best speed.
+Note: This example script is used for demonstration only. It is far from optimal. You need to tweak the settings yourself for best speed.
 
 Available statements:
 
@@ -111,8 +111,10 @@ If thunk size is set to 1 or omitted, it will behave like using regular SelectEv
 
 ### platform: <win32|win64>
 
-Run the containing part of script on specified platform, so that you can use 32bit filter in 64bit main process, or vice vesa.
+Run the containing part of script on specified platform, so that you can use 32bit filter in 64bit main process, or vice versa.
 Only one platform statement is allowed per block (more than one is an error).
+Windows x86 / x64 only. On Windows ARM64 and on Linux the statement is ignored: the block runs
+in a native slave process, so scripts written for Windows work unchanged.
 
 #######################################################
 
@@ -141,8 +143,8 @@ Please see the example above for details.
 
 Accepted for compatibility and ignored since 2.0: the operating system schedules the threads.
 (Before 2.0 the two helper threads of the slave process were locked to logical processors, round
-robin over the physical cores. With today's schedulers, hybrid (P/E core) and many-core CPUs
-pinning them was more likely to hurt than help.)
+robin over the physical cores. The scheduler handles today's hybrid (P/E core) and many-core
+CPUs better.)
 
 #######################################################
 
@@ -206,7 +208,7 @@ bitness (win32 <-> win64), through branch, prefetch, export clip and pass clip.
 
 Diagnostics: with the environment variable MPP_TRACE_PROPS=1 set before the host starts,
 both sides report the creation, resizing and release of the extra buffers with
-OutputDebugString (visible e.g. in DebugView), lines start with "MPP_Props".
+OutputDebugString (visible e.g. in DebugView; on Linux on stderr), lines start with "MPP_Props".
 
 See MP_Pipeline_frameprops_demo.avs for an example.
 
