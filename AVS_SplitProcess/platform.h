@@ -83,7 +83,8 @@ const char* slave_executable_suffix();
 // the AviSynth library a slave loads when its block has no "### dll:" statement
 const char* default_avisynth_library();
 
-// "### platform:" (a slave of the other bitness) is available: Windows only, elsewhere it is ignored
+// "### platform:" (a slave of the other bitness) is available: Windows x86 / x64 only, elsewhere
+// (Windows on ARM64, Linux) it is ignored
 bool supports_other_platforms();
 
 // --- child processes (the slaves) --------------------------------------------------------------

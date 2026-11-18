@@ -38,6 +38,7 @@ Build:
 - Windows on ARM64: build_arm64_mingw.bat, cross-compiled on x64 Windows with llvm-mingw
   (https://github.com/mstorsjo/llvm-mingw, UCRT flavour; set LLVM_MINGW_ROOT), CMake and Ninja.
   Output: out\ARM64\llvm-mingw. The toolchain file is cmake/toolchains/llvm-mingw-aarch64.cmake.
+  "### platform:" is ignored on ARM64 (a native slave), as on Linux.
 - Linux (GCC, Clang): the same CMakeLists.txt
     cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
     cmake --build build && sudo cmake --install build
@@ -108,7 +109,8 @@ Change log:
   newer MSVC (v145), libstdc++ and libc++ match ^ and $ only at the start and end of the whole text
   without it (statements were not found there; the v141 / v143 builds were not affected).
 * Build: CMake build for MinGW (GCC, Clang) and llvm-mingw; Windows on ARM64 build (build_arm64_mingw.bat,
-  cross-compiled with llvm-mingw, for the llvm-mingw built ARM64 AviSynth+). A MinGW build needs a MinGW
+  cross-compiled with llvm-mingw, for the llvm-mingw built ARM64 AviSynth+; "### platform:" is ignored
+  there, a native slave; tests passed on Windows 11 ARM64 with AviSynth+ 3.7.6). A MinGW build needs a MinGW
   built AviSynth+ in its process (the C++ exceptions of the AviSynth interface differ between MSVC and
   MinGW), the MSVC builds an MSVC built one.
 * Documentation: frame properties, pixel formats, ### frame props statement;

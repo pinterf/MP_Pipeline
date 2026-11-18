@@ -207,7 +207,13 @@ const char* default_avisynth_library()
 
 bool supports_other_platforms()
 {
+#if defined(_M_ARM64) || defined(__aarch64__)
+    // Windows on ARM64: no other platform pair is shipped, "### platform:" is ignored (a native
+    // slave), so that scripts written for x86 / x64 run unchanged, as on Linux
+    return false;
+#else
     return true;
+#endif
 }
 
 bool set_environment_variable(const char* name, const char* value)
