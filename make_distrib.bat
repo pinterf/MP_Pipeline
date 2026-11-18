@@ -34,4 +34,4 @@ xcopy /y Documentation\MP_Pipeline_readme_avs26.avs distrib\
 xcopy /y Documentation\MP_Pipeline_readme_avsplus.avs distrib\
 xcopy /y Documentation\MP_Pipeline_frameprops_demo.avs distrib\
 xcopy /y LICENSE distrib\
-xcopy /y README.MD distrib\
+xcopy /y README.md distrib\
