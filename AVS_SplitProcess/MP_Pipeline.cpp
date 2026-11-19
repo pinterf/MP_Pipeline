@@ -42,6 +42,9 @@
 #define FRAME_PROPS_STATEMENT_START "^\\s*### frame props:"
 #define FRAME_PROPS_STATEMENT_PARAM "\\s*(\\w+)\\s*$"
 
+#define AUDIO_STATEMENT_START "^\\s*### audio:"
+#define AUDIO_STATEMENT_PARAM "\\s*(\\w+)\\s*$"
+
 #define LOAD_PLUGIN_FUNCTION_NAME "MPP_Load"
 #define GET_UPSTREAM_CLIP_FUNCTION_NAME "MPP_GetUpstreamClip"
 #define PREPARE_DOWNSTREAM_CLIP_FUNCTION_NAME "MPP_PrepareDownstreamClip"
@@ -272,6 +275,21 @@ void MP_Pipeline::prepare_slave(slave_create_params* params, IScriptEnvironment*
         if (streqi(value, "off"))
         {
             strcat(params->script, ", props=false");
+        }
+    }
+    if (has_statement(params->script, AUDIO_STATEMENT_START))
+    {
+        char value[8] = { 0 };
+        if (!scan_statement(params->script, AUDIO_STATEMENT_START AUDIO_STATEMENT_PARAM, NULL,
+            "%7s", value,
+            NULL, NULL) ||
+            (!streqi(value, "on") && !streqi(value, "off")))
+        {
+            env->ThrowError("MP_Pipeline: Invalid audio statement, use \"### audio: on\" or \"### audio: off\".");
+        }
+        if (streqi(value, "off"))
+        {
+            strcat(params->script, ", audio=false");
         }
     }
     strcat(params->script, ")\n");

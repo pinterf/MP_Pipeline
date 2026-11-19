@@ -17,7 +17,7 @@ Current version: 2.0, see the change log below.
 
 - [Installation](#installation)
 - [Usage and statements](#usage-and-statements)
-- [Frame properties and pixel formats](#frame-properties-and-pixel-formats)
+- [Frame properties, pixel formats and audio](#frame-properties-pixel-formats-and-audio)
 - [Building](#building)
 - [Tests](#tests)
 - [Change log](#change-log)
@@ -71,18 +71,20 @@ handed over with "### export clip" and "### pass clip".
 | `### dll: path` | The avisynth.dll (libavisynth.so) the block runs with. |
 | `### inherit start ###` ... `### inherit end ###` | Copies the lines between them into all downstream blocks, e.g. LoadPlugin calls. |
 | `### frame props: on\|off` | Passes the frame properties downstream or not (default: on). |
+| `### audio: on\|off` | Passes the audio downstream or not (default: on). |
 | `### setmtmode: a, b` | SetMTMode(a, b) in the block (AviSynth 2.6 classic MT). |
 | `### lock threads to cores` | Accepted and ignored since 2.0. |
 
 Every statement is described, with a full example script, in Documentation/MP_Pipeline_readme_avsplus.avs
 (and MP_Pipeline_readme_avs26.avs for AviSynth 2.6).
 
-## Frame properties and pixel formats
+## Frame properties, pixel formats and audio
 
 With AviSynth+ the frame properties travel with the frames (also between win32 and win64), and all pixel
-formats can be passed, including YA, 4:4:0, and 4:1:1 / 4:1:0 of interface V13. The requirements and the
-limits are in the documentation script mentioned above; Documentation/MP_Pipeline_frameprops_demo.avs
-is an example.
+formats can be passed, including YA, 4:4:0, and 4:1:1 / 4:1:0 of interface V13. The audio is passed
+too, in any sample type and channel count. The requirements and the limits are in the documentation
+script mentioned above; Documentation/MP_Pipeline_frameprops_demo.avs and
+MP_Pipeline_audio_demo.avs are examples.
 
 ## Building
 
@@ -106,12 +108,29 @@ is an example.
 
 ## Tests
 
-- tests/Pipeline/run_tests.ps1: pipeline tests on Windows (AVSMeter based).
+- tests/Pipeline/run_tests.ps1: pipeline tests on Windows (AVSMeter based; the audio scenarios run with
+  the avs_run test host, built by build_avs_run.bat).
 - tests/Pipeline/run_tests.sh: the same on Linux, with the avs_run test host (cmake -DMPP_BUILD_TESTS=ON).
 - tests/FrameProps: serializer unit test.
 See the comments in the files.
 
 ## Change log
+
+2.1 (in progress) pinterf
+* Audio is passed between the processes (up to 2.0 it was removed): every sample type and channel
+  count, also between win32 and win64, with branch (the audio of the first branch process), prefetch,
+  export clip and pass clip. The GetAudio requests of the host are passed upstream unchanged, in any
+  order (playing, stepping back, seeking); a request larger than the 1 MB audio buffer is split into parts.
+  A clip without video (audio only) is passed as well.
+* New statement: ### audio: on|off (default: on). "off" passes the clips of the block downstream
+  without audio. (new MPP_SharedMemoryServer parameter: audio)
+* The shared memory layout changed: MP_Pipeline.dll, its .slave.exe and the other bitness pair must
+  be from the same version (a mismatch is reported).
+* Tests: audio scenarios (tests/Pipeline/audio_*.avs) with the avs_run test host, on Windows too
+  (build_avs_run.bat). The audio is read frame by frame, in large requests, stepping back and with
+  random seeks, and compared with the same script run without MP_Pipeline.
+* Documentation: audio; new demo script Documentation/MP_Pipeline_audio_demo.avs
+* Build: NOMINMAX before the Windows headers (no min / max macros).
 
 2.0 (20261118) pinterf
 In short:

@@ -5,6 +5,8 @@
 # cmake -DMPP_BUILD_TESTS=ON), which requests every frame once. A scenario passes when its log has
 # one " OK" line per frame; error_*.avs scenarios must fail to load with the message in their first
 # line ("# expect: <text>"). A scenario stopping with Assert(false, "SKIP: <reason>") is skipped.
+# audio_*.avs scenarios run with avs_run -audio, once with MP_Pipeline and once without it (-plain):
+# the audio sample hashes of the two runs must be the same.
 # "### platform" is Windows only and ignored on Linux: the scenarios with a slave of the other
 # bitness run with a native slave here, except error_format_old_core (needs a newer slave core).
 #
@@ -58,6 +60,39 @@ for scenario in $scenarios; do
   esac
   logs="$(log_names "$scenario")"
   for l in $logs; do rm -f "$log_dir/$l.log"; done
+
+  if [[ "$scenario" == audio_* ]]; then
+    # audio: avs_run reads the audio of every frame and the whole audio in large requests; the
+    # MP_Pipeline run must give the same samples as the run without it (-plain, the reference)
+    start=$(date +%s%N)
+    problems=()
+    audio_results=()
+    for mode in "" "-plain"; do
+      name="${mode:+plain}"; name="${name:-MP_Pipeline}"
+      out="$log_dir/$scenario${mode:+.plain}.out.txt"
+      ( cd "$here" && timeout "$timeout_sec" "$host" -audio $mode "$here/$scenario.avs" "$avs_library" ) > "$out" 2>&1
+      rc=$?
+      audio_line="$(grep -m1 '^Audio: ' "$out")"
+      audio_results+=("$audio_line")
+      if [ $rc -eq 124 ]; then problems+=("$name: timeout")
+      elif [ $rc -ne 0 ]; then problems+=("$name: avs_run exit code $rc $(grep -m1 'Error:' "$out")")
+      elif [ -z "$audio_line" ]; then problems+=("$name: no audio result")
+      fi
+    done
+    ms=$(( ($(date +%s%N) - start) / 1000000 ))
+    if [ ${#problems[@]} -eq 0 ] && [ "${audio_results[0]}" != "${audio_results[1]}" ]; then
+      problems+=("MP_Pipeline: ${audio_results[0]}")
+      problems+=("plain:       ${audio_results[1]}")
+    fi
+    if [ ${#problems[@]} -eq 0 ]; then
+      printf "  %-28s OK   (%3d.%d s)\n" "$scenario" $((ms / 1000)) $((ms % 1000 / 100))
+    else
+      failed=$((failed + 1))
+      printf "  %-28s FAIL\n" "$scenario"
+      for p in "${problems[@]}"; do echo "      $p"; done
+    fi
+    continue
+  fi
 
   out="$log_dir/$scenario.out.txt"
   start=$(date +%s%N)

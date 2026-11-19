@@ -15,6 +15,10 @@
 #define WINVER _WIN32_WINNT
 
 #define WIN32_LEAN_AND_MEAN
+// no min / max macros (std::min, std::max), as AviSynth's avs/win.h does
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
 #include <Windows.h>
 

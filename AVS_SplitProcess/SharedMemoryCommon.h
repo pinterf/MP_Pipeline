@@ -28,11 +28,16 @@ constexpr uint32_t make_signature(char c1, char c2, char c3, char c4)
 // Identifies the layout of the shared memory below ("MPS": MP_Pipeline shared memory, the last
 // character is the layout version). Change it whenever the layout or the meaning of a field
 // changes, so that mismatching server and client binaries (e.g. a stale .win32/.win64 slave)
-// fail cleanly instead of misreading the mapping. The next one is 'P'.
+// fail cleanly instead of misreading the mapping. The next one is 'Q'.
 //   "MPSN" (0x4d50534e): up to the 2.0 development
-//   "MPSO" (0x4d50534f): activity counter (ActivitySignal)
-static const uint32_t SHARED_MEMORY_SOURCE_SIGNATURE = make_signature('M', 'P', 'S', 'O');
-static_assert(SHARED_MEMORY_SOURCE_SIGNATURE == 0x4d50534f, "make_signature");
+//   "MPSO" (0x4d50534f): activity counter (ActivitySignal), 2.0
+//   "MPSP" (0x4d505350): audio (REQ_GETAUDIO, audio buffer per clip)
+static const uint32_t SHARED_MEMORY_SOURCE_SIGNATURE = make_signature('M', 'P', 'S', 'P');
+static_assert(SHARED_MEMORY_SOURCE_SIGNATURE == 0x4d505350, "make_signature");
+
+// size of the audio buffer of a clip with audio; a larger GetAudio request is split into
+// requests of this size (about 2.7 s of 48 kHz stereo float audio, 16 KB per frame at 25 fps)
+static const uint32_t AUDIO_BUFFER_SIZE = 1024 * 1024;
 
 // Planes of a frame in the order they are stored in the shared frame buffer, returns their count:
 // packed formats (RGB24/32/48/64, YUY2) and Y: 1 (PLANAR_Y means the whole packed frame),
@@ -48,7 +53,8 @@ typedef enum _request_type_t
 {
     REQ_EMPTY = 0,
     REQ_GETFRAME,
-    REQ_GETPARITY
+    REQ_GETPARITY,
+    REQ_GETAUDIO
 } request_type_t;
 
 // a request, local copy
@@ -58,6 +64,9 @@ typedef struct _shared_memory_source_request_t
     int clip_index;
     int frame_number;
     int sequence_number;
+    // REQ_GETAUDIO: the samples to read, count is at most audio_buffer_samples of the clip
+    int64_t audio_start;
+    int64_t audio_count;
 } shared_memory_source_request_t;
 
 // The request slot in the shared memory, protected by request_lock.
@@ -69,6 +78,8 @@ typedef struct _shared_request_slot_t
     std::atomic<int32_t> clip_index;
     std::atomic<int32_t> frame_number;
     std::atomic<int32_t> sequence_number;
+    std::atomic<int64_t> audio_start;
+    std::atomic<int64_t> audio_count;
 } shared_request_slot_t;
 
 // a parity response, local copy, packed into the 64 bit value of the shared slot
@@ -125,6 +136,11 @@ typedef struct alignas(64) _shared_memory_clip_info_t
 
     // relative to the beginning of the mapped region, PROPS_INLINE_SIZE bytes each
     uint32_t props_inline_offset[2];
+
+    // audio buffer, relative to the beginning of the mapped region, and its size in samples;
+    // both 0 when the clip has no audio (or "### audio: off")
+    uint32_t audio_buffer_offset;
+    uint32_t audio_buffer_samples;
     // --------------------------------------
 
     // the changing part starts on a cache line, so only one cache line is affected when
@@ -135,6 +151,13 @@ typedef struct alignas(64) _shared_memory_clip_info_t
     alignas(64) std::atomic<int64_t> parity_response[2];
 
     frame_response_t frame_response[2];
+
+    // audio: a client holds audio_client_lock from its REQ_GETAUDIO request until it has copied
+    // the samples out of the audio buffer (one audio reader per clip at a time); the server
+    // fills the buffer, then sets audio_sequence to the sequence number of the request and
+    // signals audio_signal of the clip
+    alignas(64) spin_lock_t audio_client_lock;
+    std::atomic<int32_t> audio_sequence;
 } shared_memory_clip_info_t;
 
 // position of a plane (one of get_transfer_planes) in a frame buffer of the clip
@@ -214,12 +237,17 @@ static_assert(sizeof(object_state_t) == sizeof(int32_t), "Size of object_state_t
 static_assert(sizeof(parity_response_t) == sizeof(int64_t), "Size of parity_response_t must be the same as size of int64_t.");
 static_assert(alignof(shared_memory_clip_info_t) == 64, "shared_memory_clip_info_t must be 64 byte aligned.");
 static_assert(offsetof(shared_memory_clip_info_t, parity_response) % 64 == 0, "The changing part of shared_memory_clip_info_t must start on a cache line.");
+static_assert(offsetof(shared_memory_clip_info_t, audio_client_lock) % 64 == 0, "The audio part of shared_memory_clip_info_t must start on a cache line.");
+static_assert(offsetof(shared_request_slot_t, audio_start) == 16 && sizeof(shared_request_slot_t) == 32, "Unexpected shared_request_slot_t layout.");
 
 class ClipSyncGroup
 {
 public:
     ClipSyncGroup(const sys_string& name, int clip_index, shared_memory_clip_info_t& clip_info, bool is_server, ActivitySignal* activity);
     std::vector<std::unique_ptr<CondVar> > response_conds;
+    // the server tells the waiting audio reader that the audio buffer is filled; only for a
+    // clip with audio. The server thread never waits on it (no activity signal).
+    std::unique_ptr<TwoSidedLock> audio_signal;
 };
 
 // provide compatibility with TCPDeliver
@@ -250,6 +278,11 @@ public:
     {
         return (unsigned char*)header + header->clips[clip_index].props_inline_offset[response_index];
     }
+    unsigned char* audio_buffer(int clip_index) const
+    {
+        return (unsigned char*)header + header->clips[clip_index].audio_buffer_offset;
+    }
+    void check_audio_buffer_integrity(int clip_index);
 
     void signal_shutdown();
 

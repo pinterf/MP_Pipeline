@@ -39,5 +39,6 @@ xcopy /y out\ARM64\llvm-mingw\MP_Pipeline.dll.slave.exe distrib\arm64\
 xcopy /y Documentation\MP_Pipeline_readme_avs26.avs distrib\
 xcopy /y Documentation\MP_Pipeline_readme_avsplus.avs distrib\
 xcopy /y Documentation\MP_Pipeline_frameprops_demo.avs distrib\
+xcopy /y Documentation\MP_Pipeline_audio_demo.avs distrib\
 xcopy /y LICENSE distrib\
 xcopy /y README.md distrib\

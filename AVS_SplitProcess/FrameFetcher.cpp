@@ -6,6 +6,7 @@
 #include "trace.h"
 #include "utils.h"
 
+#include <algorithm>
 #include <system_error>
 #include <assert.h>
 

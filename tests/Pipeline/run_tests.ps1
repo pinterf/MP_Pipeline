@@ -10,6 +10,9 @@
   (e.g. it needs a newer AviSynth+ than the installed one).
   error_*.avs scenarios must fail to load: their first line "# expect: <text>" is the
   text the error message must contain.
+  audio_*.avs scenarios run with the test host avs_run -audio (bin\avs_run64.exe /
+  avs_run32.exe, built by build_avs_run.bat when missing), once with MP_Pipeline and once
+  without it (-plain): the audio sample hashes of the two runs must be the same.
   Needs the plugin built (Output\<platform>\<Configuration>, or a folder given with
   -PluginDir: <PluginDir>\<platform>\, e.g. a CMake / MinGW build with the other bitness pair
   copied next to it) and AviSynth+ (V8+)
@@ -75,6 +78,49 @@ foreach ($platform in $Platforms) {
   foreach ($scenario in $scenarios) {
     $logs = Get-LogNames $scenario
     foreach ($l in $logs) { Remove-Item -ErrorAction SilentlyContinue (Join-Path $logDir "$l.log") }
+
+    if ($scenario -like "audio_*") {
+      # audio: avs_run reads the audio of every frame and the whole audio in large requests; the
+      # MP_Pipeline run must give the same samples as the run without it (-plain, the reference)
+      $avsRun = Join-Path $here ("bin\avs_run{0}.exe" -f $(if ($is64) { "64" } else { "32" }))
+      if (-not (Test-Path $avsRun)) {
+        & cmd.exe /d /c "`"$(Join-Path $here "build_avs_run.bat")`"" | Out-Null
+        if (-not (Test-Path $avsRun)) { throw "Not found: $avsRun (build it with build_avs_run.bat)" }
+      }
+      $sw = [Diagnostics.Stopwatch]::StartNew()
+      $runs = @()
+      foreach ($plain in $false, $true) {
+        $outFile = Join-Path $logDir ("{0}{1}.out.txt" -f $scenario, $(if ($plain) { ".plain" } else { "" }))
+        $runArgs = @("-audio") + $(if ($plain) { @("-plain") } else { @() }) + "`"$(Join-Path $here "$scenario.avs")`""
+        $p = Start-Process -FilePath $avsRun -ArgumentList $runArgs -WorkingDirectory $here -NoNewWindow -PassThru `
+          -RedirectStandardOutput $outFile -RedirectStandardError "$outFile.err"
+        $null = $p.Handle # keeps the exit code available
+        $finished = $p.WaitForExit($TimeoutSec * 1000)
+        if (-not $finished) { $p.Kill() }
+        $text = (Get-Content -Raw -ErrorAction SilentlyContinue $outFile) + (Get-Content -Raw -ErrorAction SilentlyContinue "$outFile.err")
+        $runs += [pscustomobject]@{ Name = $(if ($plain) { "plain" } else { "MP_Pipeline" }); Finished = $finished; Code = $p.ExitCode
+          Audio = [regex]::Match([string]$text, "Audio: [^\r\n]*").Value; Error = [regex]::Match([string]$text, "Error: [^\r\n]*").Value }
+      }
+      $sw.Stop()
+      $problems = @()
+      foreach ($r in $runs) {
+        if (-not $r.Finished) { $problems += "$($r.Name): timeout" }
+        elseif ($r.Code -ne 0) { $problems += "$($r.Name): avs_run exit code $($r.Code) $($r.Error)" }
+        elseif (-not $r.Audio) { $problems += "$($r.Name): no audio result" }
+      }
+      if ($problems.Count -eq 0 -and $runs[0].Audio -ne $runs[1].Audio) {
+        $problems += "MP_Pipeline: $($runs[0].Audio)"
+        $problems += "plain:       $($runs[1].Audio)"
+      }
+      if ($problems.Count -eq 0) {
+        Write-Host ("  {0,-28} OK   ({1,5:N1} s)" -f $scenario, $sw.Elapsed.TotalSeconds)
+      } else {
+        $failed++
+        Write-Host ("  {0,-28} FAIL" -f $scenario)
+        $problems | ForEach-Object { Write-Host "      $_" }
+      }
+      continue
+    }
 
     $listener = $null
     $traceFile = Join-Path $logDir "$scenario.props_trace.txt"

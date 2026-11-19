@@ -180,6 +180,26 @@ string/data properties), or for comparison when something seems wrong.
 
 #######################################################
 
+### audio: <on|off>
+
+Default is on: the audio of the clips leaving the process is passed downstream.
+With "off" the clips of this process arrive downstream without audio (up to 2.0 MP_Pipeline
+always removed the audio).
+
+#######################################################
+
+Audio
+
+The audio travels with the clips from block to block, also between win32 and win64, through
+branch, prefetch, export clip and pass clip. Every sample type and channel count is passed.
+- The GetAudio requests of the host are passed upstream unchanged: every access order works
+  (playing, stepping back, seeking). A request larger than the 1 MB audio buffer is split into parts.
+- With branch, the audio comes from the first branch process (each branch has the whole audio of
+  the clip, only the video frames are distributed).
+- A clip without video (audio only) is passed as well.
+
+#######################################################
+
 Pixel formats (AviSynth+)
 
 All AviSynth+ pixel formats can be passed between the processes, also the ones introduced

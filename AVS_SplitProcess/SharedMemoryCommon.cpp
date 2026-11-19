@@ -62,6 +62,12 @@ ClipSyncGroup::ClipSyncGroup(const sys_string& name, int clip_index, shared_memo
         ss << name << SYSTEXT("_") << clip_index << SYSTEXT("_Response") << i;
         response_conds.push_back(unique_ptr<CondVar>(new CondVar(&clip_info.frame_response[i].lock, ss.str(), is_server, activity)));
     }
+    if (clip_info.audio_buffer_samples > 0)
+    {
+        sys_ostringstream ss;
+        ss << name << SYSTEXT("_") << clip_index;
+        audio_signal.reset(new TwoSidedLock(ss.str().c_str(), SYSTEXT("Audio"), is_server));
+    }
 }
 
 sys_string get_shared_memory_key(const char* key1, int key2)
@@ -157,7 +163,27 @@ static uint32_t compute_clip_layout(shared_memory_clip_info_t& info, const Video
         info.props_inline_offset[i] = mapping_size + CACHE_LINE_SIZE * 2;
         mapping_size = aligned(mapping_size + PROPS_INLINE_SIZE + 2048);
     }
+
+    // audio buffer of a whole number of samples, with the same guard byte spacing
+    info.audio_buffer_offset = 0;
+    info.audio_buffer_samples = 0;
+    if (info.vi.HasAudio())
+    {
+        const int bytes_per_sample = info.vi.BytesPerAudioSample();
+        if (bytes_per_sample <= 0)
+        {
+            throw runtime_error("Unsupported audio format.");
+        }
+        info.audio_buffer_samples = AUDIO_BUFFER_SIZE / (uint32_t)bytes_per_sample;
+        info.audio_buffer_offset = mapping_size + CACHE_LINE_SIZE * 2;
+        mapping_size = aligned(mapping_size + info.audio_buffer_samples * (uint32_t)bytes_per_sample + 2048);
+    }
     return mapping_size;
+}
+
+static uint32_t audio_buffer_bytes(const shared_memory_clip_info_t& info)
+{
+    return info.audio_buffer_samples * (uint32_t)info.vi.BytesPerAudioSample();
 }
 
 void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int clip_count, const VideoInfo vi_array[])
@@ -206,8 +232,19 @@ void SharedMemorySourceManager::init_server(const SYSCHAR* mapping_name, int cli
             add_guard_bytes(frame_buffer(i, j), info.frame_buffer_size);
             add_guard_bytes(props_inline_area(i, j), PROPS_INLINE_SIZE);
         }
+        if (info.audio_buffer_samples > 0)
+        {
+            add_guard_bytes(audio_buffer(i), audio_buffer_bytes(info));
+        }
     }
     assert(offset == mapping_size);
+}
+
+void SharedMemorySourceManager::check_audio_buffer_integrity(int clip_index)
+{
+    assert(clip_index >= 0 && clip_index < header->clip_count);
+    assert(header->clips[clip_index].audio_buffer_samples > 0);
+    check_guard_bytes(audio_buffer(clip_index), audio_buffer_bytes(header->clips[clip_index]));
 }
 
 
@@ -246,6 +283,10 @@ void SharedMemorySourceManager::signal_shutdown()
             for (size_t j = 0; j < conds.size(); j++)
             {
                 conds[j]->signal.signal_all();
+            }
+            if (sync_groups[i]->audio_signal)
+            {
+                sync_groups[i]->audio_signal->signal_all();
             }
         }
     }
@@ -310,6 +351,10 @@ void SharedMemorySourceManager::init_sync_objects(const sys_string& key, int cli
             for (auto& cond : group->response_conds)
             {
                 cond->signal.watch_peer(server);
+            }
+            if (group->audio_signal)
+            {
+                group->audio_signal->watch_peer(server);
             }
         }
     }

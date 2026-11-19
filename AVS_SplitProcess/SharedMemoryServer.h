@@ -27,6 +27,7 @@ private:
     
     void process_get_parity(const shared_memory_source_request_t& request);
     void process_get_frame(const shared_memory_source_request_t& request);
+    void process_get_audio(const shared_memory_source_request_t& request);
     
     void initiate_shutdown();
     bool is_shutting_down() const;

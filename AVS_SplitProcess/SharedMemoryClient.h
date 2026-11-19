@@ -23,6 +23,7 @@ private:
     // GetFrame / GetParity without the handling of a lost server (PeerLostError)
     PVideoFrame get_frame(int n, IScriptEnvironment* env);
     bool get_parity(int n);
+    void get_audio(unsigned char* buf, int64_t start, int64_t count, IScriptEnvironment* env);
     // props_error receives a frame property transfer error; the caller reports it only after
     // finishing the slot bookkeeping, so the server is never left waiting for this client
     PVideoFrame create_frame(int response_index, IScriptEnvironment* env, std::string& props_error);

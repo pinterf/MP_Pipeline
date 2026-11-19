@@ -9,7 +9,11 @@
 #define TRACE_PREFIX "SharedMemoryClient"
 #include "trace.h"
 #include <assert.h>
+#include <string.h>
+#include <algorithm>
+#include <chrono>
 #include <stdexcept>
+#include <thread>
 
 using namespace std;
 
@@ -56,8 +60,7 @@ SharedMemoryClient::SharedMemoryClient(const SharedMemoryClient_parameter_storag
                 "needs AviSynth+ interface V13 or later in this process.");
         }
     }
-    // we don't support audio
-    _vi.audio_samples_per_second = 0;
+    // _vi has the audio of the upstream clip (none with "### audio: off" there)
     for (int i = 0; i < 2; i++)
     {
         _props_readers[i].reset(new PropsReader(_manager.key, _clip_index, i));
@@ -327,6 +330,74 @@ int SharedMemoryClient::SetCacheHints(int cachehints,int frame_range)
 
 void SharedMemoryClient::GetAudio(void* buf, int64_t start, int64_t count, IScriptEnvironment* env)
 {
-    // this shouldn't be called since we disabled audio
-    assert(false);
+    if (count <= 0 || !_vi.HasAudio())
+    {
+        return;
+    }
+    try
+    {
+        get_audio((unsigned char*)buf, start, count, env);
+        return;
+    } catch (const PeerLostError&) {
+        _server_lost = true;
+    }
+    check_shutting_down(env); // throws
+}
+
+void SharedMemoryClient::get_audio(unsigned char* buf, int64_t start, int64_t count, IScriptEnvironment* env)
+{
+    SharedMemorySourceClientLockAcquire lock(_manager);
+    check_shutting_down(env);
+    auto& clip = _manager.header->clips[_clip_index];
+    TwoSidedLock* audio_signal = _manager.sync_groups[_clip_index]->audio_signal.get();
+    if (!audio_signal || clip.audio_buffer_samples == 0)
+    {
+        env->ThrowError("SharedMemoryClient: the upstream clip has no audio buffer.");
+    }
+
+    // one audio reader per clip: the buffer is ours from the request until the copy is done
+    SpinLock<> client_lock(&clip.audio_client_lock);
+    while (!client_lock.try_sleep_lock(SLEEP_LOCK_UNIT))
+    {
+        check_shutting_down(env);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    SpinLockContext<> client_lock_ctx(client_lock);
+
+    auto& request = _manager.header->request;
+    const int64_t chunk_samples = clip.audio_buffer_samples;
+    const unsigned char* audio_buffer = _manager.audio_buffer(_clip_index);
+    for (int64_t done = 0; done < count; )
+    {
+        const int64_t n = std::min(chunk_samples, count - done);
+        int request_seq = 0;
+        while (true)
+        {
+            {
+                CondVarLockAcquire cvla(*_manager.request_cond, CondVarLockAcquire::LOCK_SHORT);
+                check_shutting_down(env);
+                cvla.signal_after_unlock = true;
+                if (request.request_type == REQ_EMPTY)
+                {
+                    request.request_type = REQ_GETAUDIO;
+                    request.clip_index = _clip_index;
+                    request.frame_number = 0;
+                    request.audio_start = start + done;
+                    request.audio_count = n;
+                    request.sequence_number++;
+                    request_seq = request.sequence_number;
+                    break;
+                }
+            }
+            _manager.request_cond->signal.wait_on_this_side(platform::WAIT_INFINITE);
+        }
+        // the server sets audio_sequence after filling the buffer (release), then signals
+        while (clip.audio_sequence.load(std::memory_order_acquire) != request_seq)
+        {
+            check_shutting_down(env);
+            audio_signal->wait_on_this_side(platform::WAIT_INFINITE);
+        }
+        memcpy(buf + _vi.BytesFromAudioSamples(done), audio_buffer, (size_t)_vi.BytesFromAudioSamples(n));
+        done += n;
+    }
 }

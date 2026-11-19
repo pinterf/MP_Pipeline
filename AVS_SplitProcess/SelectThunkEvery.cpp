@@ -42,8 +42,8 @@ GenericVideoFilter(child),
     int stripped_thunk_count = total_thunk_count - _first_chunk_index;
     int new_thunk_count = roundup_div(stripped_thunk_count, _every);
     bool has_final_thunk = (new_thunk_count - 1) * _every + 1 == stripped_thunk_count;
-    // we don't want to support audio
-    vi.audio_samples_per_second = 0;
+    // the audio is passed through unchanged (the whole audio of the clip, GenericVideoFilter):
+    // ThunkedInterleave takes it from the first branch
     vi.MulDivFPS(1, _every);
     if (has_final_thunk)
     {

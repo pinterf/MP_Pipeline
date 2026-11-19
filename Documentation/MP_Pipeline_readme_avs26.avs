@@ -153,6 +153,13 @@ Duplicate codes into downstream processes.
 
 Avisynth 2.6 Classic MT support (realfinder). Translates into SetMTMode(a,b)
 
+#######################################################
+
+### audio: <on|off>
+
+Default is on: the audio of the clips leaving the process is passed downstream (any sample type
+and channel count). With "off" the clips of this process arrive downstream without audio (up to
+2.0 MP_Pipeline always removed the audio).
 
 """
 

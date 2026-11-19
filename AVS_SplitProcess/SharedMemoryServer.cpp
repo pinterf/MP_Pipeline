@@ -38,12 +38,17 @@ AVSValue __cdecl Create_SharedMemoryServer(AVSValue args, void* user_data, IScri
         clips[i + 1] = aux_clips[i].AsClip();
     }
     clips[array_size + 1] = NULL;
+    const bool audio = ARG(audio).AsBool(true);
     unique_ptr<VideoInfo[]> vi_array(new VideoInfo[array_size + 1]);
     for (int i = 0; i < array_size + 1; i++)
     {
         vi_array[i] = clips[i]->GetVideoInfo();
-        // disable audio
-        vi_array[i].audio_samples_per_second = 0;
+        if (!audio)
+        {
+            // "### audio: off": the downstream clips have no audio
+            vi_array[i].audio_samples_per_second = 0;
+            vi_array[i].num_audio_samples = 0;
+        }
     }
     try
     {
@@ -293,6 +298,24 @@ void SharedMemoryServer::process_get_frame(const shared_memory_source_request_t&
     TRACE("(Clip %d) process_get_frame: %d (End)", request.clip_index, request.frame_number);
 }
 
+void SharedMemoryServer::process_get_audio(const shared_memory_source_request_t& request)
+{
+    TRACE("(Clip %d) process_get_audio: %lld, %lld", request.clip_index, (long long)request.audio_start, (long long)request.audio_count);
+    auto& clip = _manager.header->clips[request.clip_index];
+    auto& group = *_manager.sync_groups[request.clip_index];
+    if (!group.audio_signal || request.audio_count <= 0 || request.audio_count > (int64_t)clip.audio_buffer_samples)
+    {
+        throw runtime_error("Invalid audio request.");
+    }
+    // the requesting client holds audio_client_lock: nobody else reads the buffer now.
+    // The samples come from the fetcher's worker thread, which serializes them with the
+    // frame fetching of the clip.
+    _fetcher.GetAudio(request.clip_index, _manager.audio_buffer(request.clip_index), request.audio_start, request.audio_count, _env);
+    _manager.check_audio_buffer_integrity(request.clip_index);
+    clip.audio_sequence.store(request.sequence_number, std::memory_order_release);
+    group.audio_signal->switch_to_other_side();
+}
+
 unsigned SharedMemoryServer::thread_proc()
 {
     shared_memory_source_request_t request;
@@ -315,6 +338,8 @@ unsigned SharedMemoryServer::thread_proc()
                 request.clip_index = slot.clip_index;
                 request.frame_number = slot.frame_number;
                 request.sequence_number = slot.sequence_number;
+                request.audio_start = slot.audio_start;
+                request.audio_count = slot.audio_count;
                 slot.request_type = REQ_EMPTY;
                 slot.sequence_number++;
             }
@@ -345,6 +370,9 @@ unsigned SharedMemoryServer::thread_proc()
                 break;
             case REQ_GETPARITY:
                 process_get_parity(request);
+                break;
+            case REQ_GETAUDIO:
+                process_get_audio(request);
                 break;
             default:
                 assert(false);

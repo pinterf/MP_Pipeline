@@ -34,7 +34,8 @@ ThunkedInterleave::ThunkedInterleave(const ThunkedInterleave_parameter_storage_t
     bool found_last_part = false;
     _vi = clips[0].AsClip()->GetVideoInfo();
     _vi.num_frames = 0;
-    _vi.audio_samples_per_second = 0;
+    // the audio of the first branch: every branch has the whole audio of the clip (SelectThunkEvery
+    // selects video frames only)
     for (int i = 0; i < _clip_count; i++)
     {
         _clips[i] = clips[i].AsClip();
@@ -91,8 +92,7 @@ ThunkedInterleave::ThunkedInterleave(const ThunkedInterleave_parameter_storage_t
 
 void __stdcall ThunkedInterleave::GetAudio(void* buf, int64_t start, int64_t count, IScriptEnvironment* env)
 {
-    // this shouldn't be called since we have disabled audio in the constructor
-    assert(false);
+    _clips[0]->GetAudio(buf, start, count, env);
 }
 
 PVideoFrame __stdcall ThunkedInterleave::GetFrame(int n, IScriptEnvironment* env)
