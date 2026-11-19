@@ -11,7 +11,7 @@ Typical uses:
 - A different AviSynth version for a block ("### dll").
 
 Works with AviSynth+ and AviSynth 2.6 (classic). Platforms: Windows x86, x64 and ARM64, Linux x86-64.
-Current version: 2.0, see the change log below.
+Current version: 2.1, see the change log below.
 
 ## Contents
 
@@ -116,7 +116,17 @@ See the comments in the files.
 
 ## Change log
 
-2.1 (in progress) pinterf
+In short (2.0 and 2.1):
+  - Audio is passed between the processes (2.1)
+  - Frame properties are passed between the processes
+  - AviSynth+ interface V13 pixel formats: YA, 4:4:0, 4:1:1 / 4:1:0
+  - Portable source, no longer tied to MSVC: builds with MSVC, ClangCL, GCC and Clang (MinGW, llvm-mingw)
+  - CMake build (CMakeLists.txt) next to the Visual Studio solution: MinGW, llvm-mingw and Linux
+  - Windows on ARM64 (aarch64) build
+  - Linux support (x86-64)
+  - Many stability fixes and clearer error messages
+
+2.1 (20261119) pinterf
 * Audio is passed between the processes (up to 2.0 it was removed): every sample type and channel
   count, also between win32 and win64, with branch (the audio of the first branch process), prefetch,
   export clip and pass clip. The GetAudio requests of the host are passed upstream unchanged, in any
@@ -129,19 +139,13 @@ See the comments in the files.
 * Tests: audio scenarios (tests/Pipeline/audio_*.avs) with the avs_run test host, on Windows too
   (build_avs_run.bat). The audio is read frame by frame, in large requests, stepping back and with
   random seeks, and compared with the same script run without MP_Pipeline.
-* Documentation: audio; new demo script Documentation/MP_Pipeline_audio_demo.avs
+* Documentation: audio; new demo script Documentation/MP_Pipeline_audio_demo.avs.
+  MP_Pipeline_readme_avs26.avs: "### lock threads to cores" is accepted and ignored since 2.0.
 * Build: NOMINMAX before the Windows headers (no min / max macros).
+* Build: build_release.bat builds the x86 / x64 Release with the v143 toolset again (the 2.0 package
+  was built with v145): it runs with the VC++ 14.44 runtime, the last one for Windows 7.
 
 2.0 (20261118) pinterf
-In short:
-  - Frame properties are passed between the processes
-  - AviSynth+ interface V13 pixel formats: YA, 4:4:0, 4:1:1 / 4:1:0
-  - Portable source, no longer tied to MSVC: builds with MSVC, ClangCL, GCC and Clang (MinGW, llvm-mingw)
-  - CMake build (CMakeLists.txt) next to the Visual Studio solution: MinGW, llvm-mingw and Linux
-  - Windows on ARM64 (aarch64) build
-  - Linux support (x86-64)
-  - Many stability fixes and clearer error messages
-Details:
 * Frame properties are passed between the processes (AviSynth+, interface V8 or later on both sides),
   also between win32 and win64, with branch, prefetch, export clip and pass clip.
   Integer, float and data properties incl. arrays; the data type hint (binary/UTF-8) is kept when both
