@@ -6,7 +6,9 @@ rem  MP_Pipeline release build
 rem
 rem  Builds all release variants, collects them (make_distrib.bat) into
 rem  the distrib folder and packs it into a 7-Zip archive:
-rem    x86, x64        Release, Visual Studio 2026 (toolset v145)
+rem    x86, x64        Release, Visual Studio 2026 with the v143 toolset (MSVC 14.44): it runs
+rem                    with the 14.44 VC++ runtime, the last one for Windows 7; v145 would
+rem                    need a newer runtime. VS 2026 needs the v143 build tools component.
 rem    x86_xp, x64_xp  ReleaseXP, Visual Studio 2022 (v141_xp: VS 2026 has no v141_xp toolset)
 rem    arm64           Windows on ARM64, cross-compiled with llvm-mingw
 rem                    (build_arm64_mingw.bat, needs Ninja)
@@ -124,8 +126,8 @@ rem  BUILDS
 rem ============================================================
 
 if not "%BUILD_VS%"=="1" goto :skip_vs
-call :vs_build "%MSBUILD_2026%" Release Win32 "-p:PlatformToolset=v145" || goto :fatal_exit
-call :vs_build "%MSBUILD_2026%" Release x64 "-p:PlatformToolset=v145" || goto :fatal_exit
+call :vs_build "%MSBUILD_2026%" Release Win32 "-p:PlatformToolset=v143" || goto :fatal_exit
+call :vs_build "%MSBUILD_2026%" Release x64 "-p:PlatformToolset=v143" || goto :fatal_exit
 :skip_vs
 
 if not "%BUILD_XP%"=="1" goto :skip_xp
